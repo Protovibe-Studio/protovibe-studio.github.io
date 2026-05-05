@@ -2020,7 +2020,7 @@ function Hero(props: any) {
             {/* pv-block-end:pjtruu */}
             {/* pv-block-start:b00305 */}
             <h1 data-pv-block="b00305" className="animate-[hero-rise_700ms_ease-out_both] leading-[0.98] tracking-tighter font-secondary font-extrabold mx-auto text-[clamp(44px,9vw,72px)] max-w-[16ch]">
-              Design pixel-perfect prototypes with AI
+              Design pixel‑perfect prototypes with AI
             </h1>
             {/* pv-block-end:b00305 */}
             {/* pv-block-start:b00306 */}
