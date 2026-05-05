@@ -1463,7 +1463,7 @@ export function InstallModal({ open, onClose }: { open: boolean; onClose: () => 
       <div data-pv-block="b00231" className="fixed inset-0 z-[100] bg-background-overlay flex items-start justify-center p-[12px] pt-[32px] sm:p-[24px] sm:pt-[64px] animate-[fade-in_0.2s_ease] overflow-y-auto overflow-scroll" onClick={handleClose}>
         {/* pv-editable-zone-start:z00080 */}
           {/* pv-block-start:b00232 */}
-          <div data-pv-block="b00232" className="relative w-full rounded-[16px] p-[20px] sm:p-[36px_36px_32px] animate-[modal-in_0.25s_cubic-bezier(.2,.8,.3,1)] overflow-y-auto bg-background-elevated border-0 border-border-default shadow-2xl overflow-hidden max-w-[640px]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+          <div data-pv-block="b00232" className="relative w-full rounded-[16px] p-[20px] sm:p-[36px_36px_32px] animate-[modal-in_0.25s_cubic-bezier(.2,.8,.3,1)] overflow-y-auto border-0 border-border-default shadow-2xl overflow-hidden max-w-[640px] bg-background-elevated" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
             {/* pv-editable-zone-start:z00081 */}
               {/* pv-block-start:b00233 */}
               <div data-pv-block="b00233" className="absolute top-[-40%] left-[-10%] right-[-10%] h-[60%] pointer-events-none blur-[80px] z-0 rounded-[16px] opacity-10" style={{ background: 'radial-gradient(circle at 30% 50%, #3d7bff, transparent 60%), radial-gradient(circle at 70% 50%, oklch(0.70 0.26 320), transparent 60%)' }} />

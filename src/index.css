@@ -25,9 +25,9 @@
  --background-tertiary: oklch(100% 0.044 331.6 / 0.09);
  --background-tertiary-hover: rgba(255,255,255,0.10);
  --background-tertiary-pressed: rgba(255,255,255,0.14);
- --background-elevated: oklch(91.7% 0.14 301.1 / 0.12);
- --background-elevated-hover: oklch(89.44% 0.07467 314.7 / 0.17);
- --background-elevated-pressed: oklch(89.44% 0.07467 314.7 / 0.08);
+ --background-elevated: oklch(26.37% 0.00621 314.7);
+ --background-elevated-hover: oklch(33.35% 0.00804 317.7);
+ --background-elevated-pressed: oklch(20.66% 0.00419 308.2);
  --background-sunken: #0d0d0d;
  --background-sunken-hover: #101010;
  --background-sunken-pressed: #161616;
@@ -118,9 +118,9 @@
  --background-tertiary: oklch(100% 0.044 331.6 / 0.09); /* code blocks, elevated */
  --background-tertiary-hover: rgba(255,255,255,0.10);
  --background-tertiary-pressed: rgba(255,255,255,0.14);
- --background-elevated: oklch(89.44% 0.07467 314.7 / 0.12); /* floating surfaces */
- --background-elevated-hover: oklch(90.16% 0.07326 317.4 / 0.17);
- --background-elevated-pressed: oklch(89.34% 0.07961 317.4 / 0.08);
+ --background-elevated: oklch(26.3% 0.007 312.3); /* floating surfaces */
+ --background-elevated-hover: oklch(33.4% 0.00621 314.7);
+ --background-elevated-pressed: oklch(20.6% 0.00621 314.7);
  --background-sunken: #0d0d0d; /* recessed wells — darker than default in dark mode */
  --background-sunken-hover: #101010;
  --background-sunken-pressed: #161616;
