@@ -2036,11 +2036,11 @@ function Hero(props: any) {
                 {/* pv-block-end:jkwl83 */}
 
                 {/* pv-block-start:jppuwr */}
-                <Button leftIcon="carbon:demo" data-pv-block="jppuwr" label="Demo in Stackblitz" variant="solid" color="neutral" size="lg" />
+                <Button className="hidden" leftIcon="carbon:demo" data-pv-block="jppuwr" label="Demo in Stackblitz" variant="solid" color="neutral" size="lg" />
                 {/* pv-block-end:jppuwr */}
 
                 {/* pv-block-start:twnfpe */}
-                <Button leftIcon="mdi:github" data-pv-block="twnfpe" label="Star on GitHub" variant="ghost" color="neutral" size="lg" />
+                <Button leftIcon="mdi:github" data-pv-block="twnfpe" label="Star on GitHub" variant="solid" color="neutral" size="lg" />
                 {/* pv-block-end:twnfpe */}
               {/* pv-editable-zone-end:z00108 */}
             </div>
