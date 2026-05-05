@@ -2150,7 +2150,7 @@ export default function App() {
   return (
     <>
     {/* pv-block-start:b00291 */}
-    <div data-pv-block="b00291" data-theme="dark" className="bg-background-default text-foreground-default text-[16px] leading-[1.55] antialiased min-h-screen relative" style={{ textRendering: 'optimizeLegibility' }}>
+    <div data-pv-block="b00291" data-theme="dark" className="bg-background-default text-foreground-default text-[16px] leading-[1.55] antialiased min-h-screen relative overflow-x-clip" style={{ textRendering: 'optimizeLegibility' }}>
       {/* pv-editable-zone-start:z00103 */}
         {/* pv-block-start:b00292 */}
         <style data-pv-block="b00292">{GLOBAL_STYLES}</style>
