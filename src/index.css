@@ -25,9 +25,9 @@
  --background-tertiary: oklch(100% 0.044 331.6 / 0.09);
  --background-tertiary-hover: rgba(255,255,255,0.10);
  --background-tertiary-pressed: rgba(255,255,255,0.14);
- --background-elevated: oklch(21.4% 0.016 271.6);
- --background-elevated-hover: rgba(255,255,255,0.10);
- --background-elevated-pressed: rgba(255,255,255,0.14);
+ --background-elevated: oklch(91.7% 0.14 301.1 / 0.12);
+ --background-elevated-hover: oklch(89.44% 0.07467 314.7 / 0.17);
+ --background-elevated-pressed: oklch(89.44% 0.07467 314.7 / 0.08);
  --background-sunken: #0d0d0d;
  --background-sunken-hover: #101010;
  --background-sunken-pressed: #161616;
@@ -80,7 +80,7 @@
  --foreground-strong: #f4f4f6;
  --foreground-disabled: #52525d;
  --foreground-inverse: #070707;
- --foreground-on-primary: #ffffff;
+ --foreground-on-primary: oklch(100% 0 89.9 / 0.86);
  --foreground-primary: #3d7bff;
  --foreground-destructive: #ff7073;
  --foreground-success: #23bd7d;
@@ -118,9 +118,9 @@
  --background-tertiary: oklch(100% 0.044 331.6 / 0.09); /* code blocks, elevated */
  --background-tertiary-hover: rgba(255,255,255,0.10);
  --background-tertiary-pressed: rgba(255,255,255,0.14);
- --background-elevated: oklch(21.4% 0.016 271.6); /* floating surfaces */
- --background-elevated-hover: rgba(255,255,255,0.10);
- --background-elevated-pressed: rgba(255,255,255,0.14);
+ --background-elevated: oklch(89.44% 0.07467 314.7 / 0.12); /* floating surfaces */
+ --background-elevated-hover: oklch(90.16% 0.07326 317.4 / 0.17);
+ --background-elevated-pressed: oklch(89.34% 0.07961 317.4 / 0.08);
  --background-sunken: #0d0d0d; /* recessed wells — darker than default in dark mode */
  --background-sunken-hover: #101010;
  --background-sunken-pressed: #161616;
@@ -173,7 +173,7 @@
  --foreground-strong: #f4f4f6;
  --foreground-disabled: #52525d;
  --foreground-inverse: #070707;
- --foreground-on-primary: #ffffff;
+ --foreground-on-primary: oklch(100% 0 89.9 / 0.86);
  --foreground-primary: #3d7bff;
  --foreground-destructive: #ff7073;
  --foreground-success: #23bd7d;

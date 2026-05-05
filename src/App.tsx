@@ -561,7 +561,7 @@ function BYOAgent(props: any) {
           <div data-pv-block="b00060" className="grid grid-cols-2 md:grid-cols-3 gap-[16px] mx-auto max-w-[800px]">
             {/* pv-editable-zone-start:z00017 */}
               {/* pv-block-start:b00061 */}
-              <div data-pv-block="b00061" className="bg-background-secondary rounded-[12px] flex flex-col transition-all duration-150 hover:bg-background-tertiary hover:-translate-y-[2px] gap-2 items-center p-7 justify-center aspect-3/2">
+              <div data-pv-block="b00061" className="bg-background-secondary rounded-[12px] flex flex-col gap-2 items-center p-7 justify-center md:aspect-3/2">
                 {/* pv-editable-zone-start:z00018 */}
                   {/* pv-block-start:2orjpw */}
                   <Icon className="text-amber-600" data-pv-block="2orjpw" iconSymbol="mingcute:claude-line" size="xl" />
@@ -588,7 +588,7 @@ function BYOAgent(props: any) {
               {/* pv-block-end:b00061 */}
 
               {/* pv-block-start:0qu4t8 */}
-              <div data-pv-block="0qu4t8" className="bg-background-secondary rounded-[12px] flex flex-col transition-all duration-150 hover:bg-background-tertiary hover:-translate-y-[2px] gap-2 items-center p-7 aspect-3/2 justify-center">
+              <div data-pv-block="0qu4t8" className="bg-background-secondary rounded-[12px] flex flex-col gap-2 items-center p-7 md:aspect-3/2 justify-center">
                 {/* pv-editable-zone-start:z00018 */}
                   {/* pv-block-start:yd5dll */}
                   <Icon className="text-foreground-default" data-pv-block="yd5dll" iconSymbol="ri:copilot-fill" size="xl" />
@@ -613,7 +613,7 @@ function BYOAgent(props: any) {
               {/* pv-block-end:0qu4t8 */}
 
               {/* pv-block-start:ig7ao9 */}
-              <div data-pv-block="ig7ao9" className="bg-background-secondary rounded-[12px] flex flex-col transition-all duration-150 hover:bg-background-tertiary hover:-translate-y-[2px] gap-2 items-center p-7 aspect-3/2 justify-center">
+              <div data-pv-block="ig7ao9" className="bg-background-secondary rounded-[12px] flex flex-col gap-2 items-center p-7 md:aspect-3/2 justify-center">
                 {/* pv-editable-zone-start:z00018 */}
                   {/* pv-block-start:bpd0ad */}
                   <Icon iconSymbol="solar:cursor-bold" className="text-transparent bg-contain bg-center bg-no-repeat bg-[url('/src/images/from-protovibe/cursor-1.svg')] aspect-[1/1]" data-pv-block="bpd0ad"  size="xl" />
@@ -640,7 +640,7 @@ function BYOAgent(props: any) {
               {/* pv-block-end:ig7ao9 */}
 
               {/* pv-block-start:ruagve */}
-              <div data-pv-block="ruagve" className="bg-background-secondary rounded-[12px] flex flex-col transition-all duration-150 hover:bg-background-tertiary hover:-translate-y-[2px] gap-2 items-center p-7 aspect-3/2 justify-center">
+              <div data-pv-block="ruagve" className="bg-background-secondary rounded-[12px] flex flex-col gap-2 items-center p-7 md:aspect-3/2 justify-center">
                 {/* pv-editable-zone-start:z00018 */}
                   {/* pv-block-start:ruo32p */}
                   <Icon className="text-foreground-default" data-pv-block="ruo32p" iconSymbol="meteor-icons:openai" size="xl" />
@@ -667,7 +667,7 @@ function BYOAgent(props: any) {
               {/* pv-block-end:ruagve */}
 
               {/* pv-block-start:uezzcq */}
-              <div data-pv-block="uezzcq" className="bg-background-secondary rounded-[12px] flex flex-col transition-all duration-150 hover:bg-background-tertiary hover:-translate-y-[2px] gap-2 items-center p-7 aspect-3/2 justify-center">
+              <div data-pv-block="uezzcq" className="bg-background-secondary rounded-[12px] flex flex-col gap-2 items-center p-7 md:aspect-3/2 justify-center">
                 {/* pv-editable-zone-start:z00018 */}
                   {/* pv-block-start:knrkaq */}
                   <Icon className="text-transparent bg-[url('/src/images/from-protovibe/gemini-color.png')] bg-contain bg-center bg-no-repeat aspect-[1/1]" data-pv-block="knrkaq" iconSymbol="lineicons:gemini" size="xl" />
@@ -687,7 +687,7 @@ function BYOAgent(props: any) {
               {/* pv-block-end:uezzcq */}
 
               {/* pv-block-start:0pe2av */}
-              <div data-pv-block="0pe2av" className="bg-background-secondary rounded-[12px] flex flex-col transition-all duration-150 hover:bg-background-tertiary hover:-translate-y-[2px] gap-2 items-center p-7 aspect-3/2 justify-center">
+              <div data-pv-block="0pe2av" className="bg-background-secondary rounded-[12px] flex flex-col gap-2 items-center p-7 md:aspect-3/2 justify-center">
                 {/* pv-editable-zone-start:z00018 */}
                   {/* pv-block-start:este2x */}
                   <Icon className="rounded-full text-foreground-secondary" data-pv-block="este2x" iconSymbol="ri:more-fill" size="xl" />
@@ -904,7 +904,7 @@ function ProblemSolution(props: any) {
       <section {...props} data-pv-component-id="ProblemSolution" className="py-[100px]" id="problems">
         {/* pv-editable-zone-start:z00035 */}
           {/* pv-block-start:b00125 */}
-          <div data-pv-block="b00125" className="max-w-2/3 mb-64px mx-auto text-center">
+          <div data-pv-block="b00125" className="mb-64px mx-auto text-center max-w-[700px]">
             {/* pv-editable-zone-start:z00036 */}
               {/* pv-block-start:b00126 */}
               <div data-pv-block="b00126" className="font-bold text-[12px] tracking-[0.18em] uppercase mb-[16px] text-foreground-primary">Problem → Solution</div>
@@ -2025,11 +2025,11 @@ function Hero(props: any) {
             {/* pv-block-end:b00305 */}
             {/* pv-block-start:b00306 */}
             <p data-pv-block="b00306" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:80ms] text-[clamp(16px,1.3vw,19px)] text-foreground-default mt-6 mx-auto text-balance max-w-[75ch]">
-              Protovibe Studio is a free tool for UX/UI designers who love the power of vibe-coding but still want to design like a human. It's a visual editor for React code, so you and your coding agent are finally on the same page.
+              Protovibe Studio is an open-source tool for UX/UI designers who love the power of vibe-coding but still want to design like a human. It's a visual editor for React code, so you and your coding agent are finally on the same page.
             </p>
             {/* pv-block-end:b00306 */}
             {/* pv-block-start:b00307 */}
-            <div data-pv-block="b00307" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:160ms] flex gap-[12px] mt-[36px] flex-wrap justify-center flex-col items-stretch min-w-64">
+            <div data-pv-block="b00307" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:160ms] flex gap-[12px] mt-[36px] flex-wrap justify-center flex-col items-stretch min-w-64 z-2">
               {/* pv-editable-zone-start:z00108 */}
                 {/* pv-block-start:jkwl83 */}
                 <Button rightIcon="mdi:arrow-right" data-pv-block="jkwl83" data-install label="Download" variant="solid" color="primary" size="lg" />
