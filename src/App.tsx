@@ -1957,7 +1957,9 @@ function FooterCTA(props: any) {
                   {/* pv-block-end:qnw0mp */}
 
                   {/* pv-block-start:s7lvih */}
-                  <Button leftIcon="mdi:github" data-pv-block="s7lvih" label="Star on GitHub" variant="solid" color="neutral" size="lg" />
+                  <a data-pv-block="s7lvih" href="https://github.com/Protovibe-Studio/protovibe-studio" target="_blank" rel="noreferrer">
+                    <Button leftIcon="mdi:github" label="Star on GitHub" variant="solid" color="neutral" size="lg" />
+                  </a>
                   {/* pv-block-end:s7lvih */}
                 {/* pv-editable-zone-end:z00108 */}
               </div>
@@ -2040,7 +2042,9 @@ function Hero(props: any) {
                 {/* pv-block-end:jppuwr */}
 
                 {/* pv-block-start:twnfpe */}
-                <Button leftIcon="mdi:github" data-pv-block="twnfpe" label="Star on GitHub" variant="solid" color="neutral" size="lg" />
+                <a data-pv-block="twnfpe" href="https://github.com/Protovibe-Studio/protovibe-studio" target="_blank" rel="noreferrer">
+                  <Button leftIcon="mdi:github" label="Star on GitHub" variant="solid" color="neutral" size="lg" />
+                </a>
                 {/* pv-block-end:twnfpe */}
               {/* pv-editable-zone-end:z00108 */}
             </div>
