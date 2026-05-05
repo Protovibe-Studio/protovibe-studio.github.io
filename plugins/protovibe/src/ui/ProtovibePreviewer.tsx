@@ -626,30 +626,21 @@ const VariantMatrix: React.FC<{ entry: ComponentEntry; targetProps: Record<strin
     visibleCombos.forEach((combo: Record<string, any>, i: number) => {
       let score = 0;
 
-      for (const [key, schema] of Object.entries(config.props || {})) {
+      for (const key of Object.keys(config.props || {})) {
         const tVal = targetProps[key];
         const cVal = combo[key];
-
-        // Normalize to strings for comparison
         const normTarget = (tVal === undefined || tVal === null) ? '' : String(tVal);
         const normCombo = (cVal === undefined || cVal === null) ? '' : String(cVal);
 
-        if (schema.type === 'string') {
-          // For strings, we just care about presence vs absence
-          const tHasText = normTarget !== '';
-          const cHasText = normCombo !== '';
-          if (tHasText === cHasText) {
-            score += 1;
-          }
-        } else {
-          // For selects and booleans, exact match gets 2 points
-          if (normTarget === normCombo) {
-            score += 2;
-          }
-          // Partial match: Target is unset, but combo explicitly sets it to 'default'
-          else if (normTarget === '' && normCombo === 'default') {
-            score += 1;
-          }
+        // Exact match wins, then presence match (both have *some* value), then
+        // both-empty match. This handles icon pickers and free-text props where
+        // the combo space can't represent every concrete value.
+        if (normTarget === normCombo) {
+          score += 2;
+        } else if (normTarget !== '' && normCombo !== '') {
+          score += 1;
+        } else if (normTarget === '' && normCombo === '') {
+          score += 1;
         }
       }
 
@@ -659,17 +650,42 @@ const VariantMatrix: React.FC<{ entry: ComponentEntry; targetProps: Record<strin
       }
     });
 
-    // Delay the focus to ensure PV_CLEAR_SELECTION from the tab switch is fully processed
-    setTimeout(() => {
+    // Poll until the variant cell, the component element, AND its Babel-injected
+    // data-pv-loc-* locator attributes are all present. A fixed timeout was racing
+    // with mount/locator attachment, causing the first focus to land on a stale
+    // ancestor and leaving the inspector scoped to the consumer-side source
+    // (which has minimal parsedClasses, so the "Which state to style" list rendered
+    // incomplete until the user clicked the tab a second time).
+    const MAX_ATTEMPTS = 20;
+    const INTERVAL_MS = 50;
+    const INITIAL_DELAY_MS = 50;
+    let attempts = 0;
+    const tryFocus = () => {
       const cell = document.querySelector(`[data-combo-index="${bestMatchIndex}"]`);
-      if (cell) {
-        const targetEl = cell.querySelector(`[data-pv-component-id="${config.name}"]`) || cell.querySelector('[data-pv-component-id]');
-        if (targetEl) {
-          targetEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
-          targetEl.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
-        }
+      const targetEl = cell
+        ? (cell.querySelector(`[data-pv-component-id="${config.name}"]`) || cell.querySelector('[data-pv-component-id]'))
+        : null;
+      const hasLocator = targetEl
+        ? Array.from(targetEl.attributes).some(a => a.name.startsWith('data-pv-loc-'))
+        : false;
+
+      if (targetEl && hasLocator) {
+        targetEl.scrollIntoView({ block: 'center', behavior: 'auto' });
+        targetEl.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+        return;
       }
-    }, 250);
+      attempts++;
+      if (attempts < MAX_ATTEMPTS) {
+        setTimeout(tryFocus, INTERVAL_MS);
+        return;
+      }
+      // Last-resort: dispatch on whatever we have so the user still sees a focus.
+      if (targetEl) {
+        targetEl.scrollIntoView({ block: 'center', behavior: 'auto' });
+        targetEl.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+      }
+    };
+    setTimeout(tryFocus, INITIAL_DELAY_MS);
   }, [targetProps, visibleCombos, config]);
 
   return (

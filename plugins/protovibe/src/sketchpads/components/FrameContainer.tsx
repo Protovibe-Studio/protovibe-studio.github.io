@@ -105,15 +105,12 @@ export function FrameContainer({
         onSelect(frameId, false);
       }
 
-      // Also select the root pv-block so paste/insert shortcuts have an anchor —
-      // mirrors what clicking the frame background does via the builder bridge.
-      // One-way: selecting a child block does not select the frame.
+      // Also focus the frame's root content div in the inspector so paste/insert
+      // shortcuts have an anchor — mirrors what clicking the bare frame background
+      // does via the builder bridge. One-way: selecting a child block does not
+      // select the frame.
       if (!additive) {
-        const rootNode = contentRef.current?.querySelector('[data-pv-block]');
-        const blockId = rootNode?.getAttribute('data-pv-block');
-        if (blockId) {
-          window.dispatchEvent(new CustomEvent('pv-select-block', { detail: { blockId } }));
-        }
+        window.dispatchEvent(new CustomEvent('pv-select-frame-root', { detail: { frameId } }));
       }
 
       isDuplicateDragRef.current = e.altKey;
@@ -154,6 +151,11 @@ export function FrameContainer({
       for (const sib of groupDragRef.current) {
         sib.el.style.transform = `translate(${dx}px, ${dy}px)`;
       }
+      // The sketchpad-bridge overlay layer is position:fixed in document coords and
+      // only re-syncs on canvas transform / scroll / direct ResizeObserver hits. A frame
+      // translate change is invisible to all of those, so any active selection overlay
+      // would lag behind. Reuse the canvas-transform channel to trigger a re-sync.
+      window.dispatchEvent(new Event('pv-canvas-transform'));
       // Track alt key state mid-drag (mirrors sketchpad-bridge pattern)
       const altHeld = e.altKey;
       isDuplicateDragRef.current = altHeld;
@@ -351,7 +353,22 @@ export function FrameContainer({
       onSelect(null);
 
       if (contentRef.current) {
-        const rootNode = contentRef.current.querySelector('[data-pv-block]');
+        // Hit-test the actual element under the click. The overlay sits on top of
+        // the content with z-index 100, so we ask the browser for the stack at the
+        // click point and pick the topmost element that is (a) inside this frame's
+        // content and (b) has a data-pv-block. Falls back to the first block if the
+        // click happened over empty space.
+        const stack = document.elementsFromPoint(e.clientX, e.clientY) as HTMLElement[];
+        let hit: HTMLElement | null = null;
+        for (const el of stack) {
+          if (!contentRef.current.contains(el)) continue;
+          const block = el.closest('[data-pv-block]') as HTMLElement | null;
+          if (block && contentRef.current.contains(block)) {
+            hit = block;
+            break;
+          }
+        }
+        const rootNode = hit ?? contentRef.current.querySelector('[data-pv-block]');
         if (rootNode) {
           const blockId = rootNode.getAttribute('data-pv-block');
           if (blockId) {

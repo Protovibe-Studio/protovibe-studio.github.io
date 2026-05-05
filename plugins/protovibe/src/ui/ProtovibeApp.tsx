@@ -7,6 +7,7 @@ import { ShellNavBar, IframeTab, SidebarTab } from './components/ShellNavBar';
 import { TokensTab } from './components/TokensTab';
 import { PromptsTab } from './components/PromptsTab';
 import { Sidebar } from './components/Sidebar';
+import { FloatingToolbar } from './components/FloatingToolbar';
 import { ToastViewport } from './components/ToastViewport';
 import { useIframeBridge } from './hooks/useIframeBridge';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -34,7 +35,7 @@ export const ProtovibeApp: React.FC = () => {
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>('design');
   const [showErrorBanner, setShowErrorBanner] = useState(false);
 
-  const { inspectorOpen, toggleInspector, clearFocus, refreshComponents, setHtmlFontSize, runLockedMutation, iframeTheme, setIframeTheme } = useProtovibe();
+  const { inspectorOpen, toggleInspector, refreshComponents, setHtmlFontSize, runLockedMutation, iframeTheme, setIframeTheme } = useProtovibe();
   const [appIframePath, setAppIframePath] = useState('/');
   const [mobileWidth, setMobileWidth] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -92,21 +93,17 @@ export const ProtovibeApp: React.FC = () => {
   useIframeBridge(appIframeRef, sketchpadIframeRef, componentsIframeRef);
   useKeyboardShortcuts();
 
-  // Canonical tab-switch: always clears inspector focus and iframe outlines.
-  // Use this everywhere instead of calling setActiveIframeTab directly.
+  // Canonical tab-switch: preserves inspector focus across tabs so users can
+  // tweak a component in Components and preview it in App without re-selecting.
   const handleIframeTabChange = useCallback((tab: IframeTab) => {
     if (activeIframeTab === 'app' && tab !== 'app') {
       captureAppScrollPositions();
     }
-    clearFocus();
     setActiveIframeTab(tab);
     syncTabToURL(tab);
     if (tab === 'app' && activeIframeTab !== 'app') {
       restoreAppScrollPositions();
     }
-    [appIframeRef, sketchpadIframeRef, componentsIframeRef].forEach(ref => {
-      ref.current?.contentWindow?.postMessage({ type: 'PV_CLEAR_SELECTION' }, '*');
-    });
     refreshComponents();
     if (tab === 'components') {
       componentsIframeRef.current?.contentWindow?.postMessage({ type: 'PV_REFRESH_COMPONENTS' }, '*');
@@ -115,9 +112,13 @@ export const ProtovibeApp: React.FC = () => {
       (document.activeElement as HTMLElement | null)?.blur?.();
       requestAnimationFrame(() => {
         sketchpadIframeRef.current?.contentWindow?.focus();
+        sketchpadIframeRef.current?.contentWindow?.postMessage(
+          { type: 'PV_SKETCHPAD_TAB_OPENED' },
+          '*',
+        );
       });
     }
-  }, [clearFocus, refreshComponents, activeIframeTab, captureAppScrollPositions, restoreAppScrollPositions]);
+  }, [refreshComponents, activeIframeTab, captureAppScrollPositions, restoreAppScrollPositions]);
 
   // Ensure ?tab param is always present in the URL on initial load
   useEffect(() => {
@@ -134,14 +135,10 @@ export const ProtovibeApp: React.FC = () => {
     const handlePopState = () => {
       const tab = parseTabParam(window.location.search);
       setActiveIframeTab(tab);
-      clearFocus();
-      [appIframeRef, sketchpadIframeRef, componentsIframeRef].forEach(ref => {
-        ref.current?.contentWindow?.postMessage({ type: 'PV_CLEAR_SELECTION' }, '*');
-      });
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [clearFocus]);
+  }, []);
 
   // When a ui-source tab is clicked in the inspector, switch to the Components
   // iframe and tell the previewer to open that component's playground view.
@@ -607,38 +604,39 @@ export const ProtovibeApp: React.FC = () => {
           )}
         </div>
 
-        {activeSidebarTab === 'design' && (
+        <div style={{ display: activeSidebarTab === 'design' ? 'contents' : 'none' }}>
           <Sidebar isOpen={inspectorOpen} />
-        )}
+        </div>
 
-        {activeSidebarTab === 'tokens' && inspectorOpen && (
+        {inspectorOpen && (
           <div
             style={{
               width: `${INSPECTOR_WIDTH_PX}px`,
               flexShrink: 0,
               borderLeft: `1px solid ${theme.border_default}`,
               overflow: 'hidden',
-              display: 'flex',
+              display: activeSidebarTab === 'tokens' ? 'flex' : 'none',
             }}
           >
             <TokensTab />
           </div>
         )}
 
-        {activeSidebarTab === 'prompts' && inspectorOpen && (
+        {inspectorOpen && (
           <div
             style={{
               width: `${INSPECTOR_WIDTH_PX}px`,
               flexShrink: 0,
               borderLeft: `1px solid ${theme.border_default}`,
               overflow: 'hidden',
-              display: 'flex',
+              display: activeSidebarTab === 'prompts' ? 'flex' : 'none',
             }}
           >
             <PromptsTab />
           </div>
         )}
 
+        <FloatingToolbar />
         <ToastViewport />
       </div>
     </div>
