@@ -69,7 +69,7 @@ function FeaturesList(props: any) {
               {/* pv-block-end:ugssgg */}
               {/* pv-block-start:wecohl */}
               <h2 data-pv-block="wecohl" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong m-0 text-balance">
-                It has everything you need to get shit done
+                It's open-source and has everything you need to get shit done.
               </h2>
               {/* pv-block-end:wecohl */}
             {/* pv-editable-zone-end:z00002 */}
@@ -529,7 +529,7 @@ function BYOAgent(props: any) {
             {/* pv-editable-zone-start:z00016 */}
               {/* pv-block-start:b00058 */}
               <h2 data-pv-block="b00058" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong m-0 text-balance">
-                Bring your own AI agent
+                Work with your own AI agent
               </h2>
               {/* pv-block-end:b00058 */}
               {/* pv-block-start:b00059 */}
@@ -1201,7 +1201,7 @@ function ProblemSolution(props: any) {
                     {/* pv-editable-zone-start:z00055 */}
                       {/* pv-block-start:b00173 */}
                       <h3 data-pv-block="b00173" className="font-secondary font-bold text-[30px] leading-[1.1] tracking-[-0.025em] text-foreground-strong m-[0_0_4px] text-balance">
-                        Design represented as code<br />
+                        Design is a code on localhost<br />
                       </h3>
                       {/* pv-block-end:b00173 */}
                       {/* pv-block-start:b00174 */}
@@ -2017,7 +2017,7 @@ function Hero(props: any) {
             {/* pv-editable-zone-start:ger2rz */}
             {/* pv-block-start:pjtruu */}
             <div data-pv-block="pjtruu" className="font-bold text-[12px] tracking-[0.18em] uppercase mb-[16px] text-foreground-primary" >
-              Open-source tool
+              Open-source web builder
             </div>
             {/* pv-block-end:pjtruu */}
             {/* pv-block-start:b00305 */}

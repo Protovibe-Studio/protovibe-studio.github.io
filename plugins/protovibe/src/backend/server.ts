@@ -377,7 +377,7 @@ export const handleGetSourceInfo = (req: any, res: any, server: import('vite').V
       // locatorMap snapshot (e.g. indentation changed since last HMR cycle).
       const lineMatches: Array<{ el: any; nameEndCol: number }> = [];
 
-      babel.traverse(ast, {
+      babel.traverse(ast!, {
         // 1. Build a map of all imports in the file
         ImportDeclaration(path) {
           const source = path.node.source.value;
@@ -708,7 +708,7 @@ export const handleGetZones: Connect.NextHandleFunction = (req, res) => {
         const zones: any[] = [];
         let pristineIndex = 1;
 
-        babel.traverse(ast, {
+        babel.traverse(ast!, {
           JSXElement(jsxPath) {
             const openingEl = jsxPath.node.openingElement;
             if (
@@ -1135,7 +1135,7 @@ export const handleAddBlock: Connect.NextHandleFunction = (req, res) => {
         let lastImportLine = 0;
         let useClientLine = 0;
 
-        babel.traverse(ast, {
+        babel.traverse(ast!, {
           Directive(path) {
             if (path.node.value.value === 'use client' && path.node.loc) {
               useClientLine = path.node.loc.end.line;
@@ -1699,7 +1699,7 @@ export const handleBlockAction: Connect.NextHandleFunction = (req, res) => {
 
         // 3. Find the target block and the zone it lives in. Only swap with a sibling
         //    block that shares the same direct enclosing zone.
-        let targetParent: Node | null = null;
+        let targetParent = null as Node | null;
         let targetSiblings: Node[] = [];
         let targetIndex = -1;
 
@@ -1767,7 +1767,7 @@ export const handleBlockAction: Connect.NextHandleFunction = (req, res) => {
         });
 
         let targetNode: any = null;
-        babel.traverse(ast, {
+        babel.traverse(ast!, {
           JSXOpeningElement(p) {
             const hasBlockId = p.node.attributes.some(attr =>
               babel.types.isJSXAttribute(attr) &&
@@ -1786,7 +1786,7 @@ export const handleBlockAction: Connect.NextHandleFunction = (req, res) => {
           const hintCol: number = Array.isArray(nameEnd) ? Number(nameEnd[1]) : -1;
           const candidates: Array<{ node: any; nameEndCol: number }> = [];
 
-          babel.traverse(ast, {
+          babel.traverse(ast!, {
             JSXOpeningElement(p) {
               if (p.node.loc?.start.line !== Number(startLine)) return;
               const nameNode = p.node.name;
@@ -2305,12 +2305,44 @@ function isCfBusy(): boolean {
   return true;
 }
 
+/**
+ * If state is parked at `waiting-for-browser-approval` from a prior login attempt
+ * but the user is in fact already logged in (OAuth completed, child process not
+ * yet reaped or user closed the tab), force-reset to idle so a fresh publish can
+ * proceed without requiring a manual page refresh.
+ */
+async function reconcileStaleLoginLock(): Promise<void> {
+  if (cfState.status !== 'waiting-for-browser-approval') return;
+  try {
+    const out = await spawnCmd('pnpm', ['exec', 'wrangler', 'whoami'], {
+      cwd: process.cwd(),
+      env: { ...process.env, ...WRANGLER_NON_INTERACTIVE_ENV },
+      timeoutMs: 15_000,
+    });
+    if (!out.includes('You are not authenticated') && !out.includes('not logged in')) {
+      console.log('[protovibe:cloudflare] Detected stale login lock with active session, resetting to idle.');
+      setCfState({ status: 'idle', message: '' });
+    }
+  } catch {
+    // whoami failed — leave state alone, real busy check will keep blocking
+  }
+}
+
 function setCfState(state: CfPublishState): void {
   cfState = state;
   cfStateTimestamp = Date.now();
 }
 
 const PUBLISH_META_PATH = path.resolve(process.cwd(), 'protovibe-data.json');
+const PUBLISH_LOG_PATH = path.resolve(process.cwd(), 'protovibe-publish.log');
+
+function cfLog(...parts: unknown[]): void {
+  const line = `[${new Date().toISOString()}] [protovibe:cloudflare] ${parts.map((p) => (p instanceof Error ? (p.stack ?? p.message) : typeof p === 'string' ? p : JSON.stringify(p))).join(' ')}`;
+  // Print to whichever terminal is hosting the Vite middleware
+  process.stdout.write(line + '\n');
+  // Also append to a file in the project root so the user can always tail it
+  try { fs.appendFileSync(PUBLISH_LOG_PATH, line + '\n', 'utf-8'); } catch {}
+}
 
 function readPublishMeta(): Record<string, any> {
   if (!fs.existsSync(PUBLISH_META_PATH)) return {};
@@ -2352,7 +2384,7 @@ function spawnCmd(
   opts: { cwd: string; env?: NodeJS.ProcessEnv; onData?: (chunk: string) => void; timeoutMs?: number },
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env, stdio: 'pipe' });
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env, stdio: 'pipe', shell: process.platform === 'win32' });
     let out = '';
     let settled = false;
     const settle = (fn: typeof resolve | typeof reject, val: string | Error) => {
@@ -2388,11 +2420,20 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
     baseEnv.CLOUDFLARE_API_TOKEN = apiToken;
   }
 
+  cfLog('=== Publish started ===', { projectName, accountId, hasApiToken: !!apiToken, cwd, platform: process.platform, log: PUBLISH_LOG_PATH });
+
   // 0. Verify wrangler is available
   try {
-    await spawnCmd('pnpm', ['exec', 'wrangler', '--version'], { cwd, env: baseEnv, timeoutMs: 15_000 });
-  } catch {
-    setCfState({ status: 'error', message: 'Wrangler is not installed. Run `pnpm add -D wrangler` and try again.' });
+    const v = await spawnCmd('pnpm', ['exec', 'wrangler', '--version'], { cwd, env: baseEnv, timeoutMs: 15_000 });
+    cfLog('wrangler --version OK:', v.trim());
+  } catch (err) {
+    const errStr = err instanceof Error ? (err.stack ?? err.message) : String(err);
+    cfLog('wrangler --version FAILED:', errStr);
+    setCfState({
+      status: 'error',
+      message: 'Wrangler is not installed or could not be launched.',
+      error: errStr,
+    });
     return;
   }
 
@@ -2442,22 +2483,90 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
     return;
   }
 
-  // 4. Ensure the Pages project exists (create if missing; ignore "already exists" errors)
+  // 4. Ensure the Pages project exists ON THIS ACCOUNT.
+  //    Cloudflare Pages project names are globally unique subdomains, so a
+  //    generic name like "test" can already be held by another account. In that
+  //    case `pages project create` returns "already exists" but the subsequent
+  //    deploy fails because the project isn't on *our* account. We verify
+  //    ownership via `pages project list` and auto-rename with a random suffix
+  //    when the desired name isn't available, persisting the new name back to
+  //    protovibe-data.json.
   setCfState({ status: 'publishing', message: 'Ensuring Cloudflare Pages project exists…' });
   const projectEnv: NodeJS.ProcessEnv = { ...baseEnv };
   if (resolvedAccount) projectEnv.CLOUDFLARE_ACCOUNT_ID = resolvedAccount;
-  try {
-    await spawnCmd(
-      'pnpm',
-      ['exec', 'wrangler', 'pages', 'project', 'create', projectName, '--production-branch', 'main'],
-      { cwd, env: projectEnv, timeoutMs: 30_000 },
-    );
-  } catch (err) {
-    // "already exists" is expected on subsequent deploys — any other error is surfaced below
-    const msg = String(err).toLowerCase();
-    if (!msg.includes('already exists') && !msg.includes('a project with this name')) {
-      console.warn('[protovibe] wrangler pages project create warning:', err);
+
+  const projectExistsOnAccount = async (name: string): Promise<boolean> => {
+    try {
+      const out = await spawnCmd(
+        'pnpm',
+        ['exec', 'wrangler', 'pages', 'project', 'list'],
+        { cwd, env: projectEnv, timeoutMs: 30_000 },
+      );
+      // Match the project name as a whole word in the table output.
+      const re = new RegExp(`(^|[\\s|│])${name.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}([\\s|│]|$)`, 'm');
+      return re.test(out);
+    } catch (err) {
+      console.warn('[protovibe:cloudflare] pages project list failed:', err);
+      return false;
     }
+  };
+
+  const tryCreateProject = async (name: string): Promise<{ ok: boolean; nameTaken: boolean; error?: string }> => {
+    try {
+      await spawnCmd(
+        'pnpm',
+        ['exec', 'wrangler', 'pages', 'project', 'create', name, '--production-branch', 'main'],
+        { cwd, env: projectEnv, timeoutMs: 30_000 },
+      );
+      return { ok: true, nameTaken: false };
+    } catch (err) {
+      const msg = String(err).toLowerCase();
+      const taken = msg.includes('already exists') || msg.includes('a project with this name');
+      return { ok: false, nameTaken: taken, error: String(err) };
+    }
+  };
+
+  let effectiveProjectName = projectName;
+  let createResult = await tryCreateProject(effectiveProjectName);
+
+  if (!createResult.ok && createResult.nameTaken) {
+    // Could be ours (fine) or someone else's (need to rename). Verify ownership.
+    const owned = await projectExistsOnAccount(effectiveProjectName);
+    if (!owned) {
+      // Name is taken globally but not by us — generate a suffixed name and persist it.
+      const MAX_RENAME_ATTEMPTS = 5;
+      let renamed = false;
+      for (let i = 0; i < MAX_RENAME_ATTEMPTS; i++) {
+        const suffix = Math.random().toString(36).slice(2, 7);
+        const candidate = `${effectiveProjectName}-${suffix}`.slice(0, 58); // CF limit is 58 chars
+        console.log(`[protovibe:cloudflare] Project name "${effectiveProjectName}" not on this account; trying "${candidate}".`);
+        const r = await tryCreateProject(candidate);
+        if (r.ok) {
+          effectiveProjectName = candidate;
+          renamed = true;
+          break;
+        }
+        if (!r.nameTaken) {
+          setCfState({ status: 'error', message: 'Failed to create Cloudflare Pages project.', error: r.error });
+          return;
+        }
+        // taken too — loop and try another suffix
+      }
+      if (!renamed) {
+        setCfState({
+          status: 'error',
+          message: `Project name "${projectName}" is taken on Cloudflare and auto-rename failed. Please choose a different project name.`,
+        });
+        return;
+      }
+      // Persist the renamed project name so future publishes use it directly.
+      const meta = readPublishMeta();
+      meta['cloudflare-wrangler-project-name'] = effectiveProjectName;
+      writePublishMeta(meta);
+    }
+    // else: project is ours, fine to proceed
+  } else if (!createResult.ok) {
+    console.warn('[protovibe] wrangler pages project create warning:', createResult.error);
   }
 
   // 5. Deploy
@@ -2468,7 +2577,7 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
   try {
     const output = await spawnCmd(
       'pnpm',
-      ['exec', 'wrangler', 'pages', 'deploy', './dist', '--project-name', projectName, '--branch', 'main'],
+      ['exec', 'wrangler', 'pages', 'deploy', './dist', '--project-name', effectiveProjectName, '--branch', 'main'],
       { cwd, env: deployEnv, timeoutMs: 3 * 60 * 1000 },
     );
     const hashedMatch = output.match(/https?:\/\/[^\s]+\.pages\.dev[^\s]*/);
@@ -2477,7 +2586,7 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
     // (e.g. `my-app-x7k`). Derive the actual project subdomain from the deploy
     // URL (`https://<hash>.<actualProject>.pages.dev`) instead of trusting the
     // requested name.
-    let canonicalUrl = `https://${projectName}.pages.dev`;
+    let canonicalUrl = `https://${effectiveProjectName}.pages.dev`;
     if (hashedUrl) {
       const host = new URL(hashedUrl).hostname; // <hash>.<project>.pages.dev
       const actualProject = host.replace(/\.pages\.dev$/, '').split('.').slice(1).join('.');
@@ -2540,9 +2649,12 @@ export const handleCloudflarePublishSaveName: Connect.NextHandleFunction = (req,
 export const handleCloudflarePublishStart: Connect.NextHandleFunction = (req, res) => {
   let body = '';
   req.on('data', (c) => { body += c; });
-  req.on('end', () => {
+  req.on('end', async () => {
     try {
       const { accountId, apiToken } = JSON.parse(body || '{}');
+      // If a previous login attempt left the lock parked, reconcile against
+      // wrangler's actual auth state before refusing the request.
+      await reconcileStaleLoginLock();
       if (isCfBusy()) {
         res.statusCode = 409;
         return res.end(JSON.stringify({ error: 'Publish already in progress.' }));
@@ -2553,8 +2665,16 @@ export const handleCloudflarePublishStart: Connect.NextHandleFunction = (req, re
         res.statusCode = 400;
         return res.end(JSON.stringify({ error: 'Project name not set.' }));
       }
+      // Mark the state busy synchronously so the frontend's status poll observes
+      // an active state on its next tick. Without this, the worker's first
+      // `setCfState` only fires after `wrangler --version` returns (several seconds
+      // on Windows), during which polls see the prior `idle` state and the UI
+      // exits the publishing view — leaving the backend running with no listener.
+      setCfState({ status: 'publishing', message: 'Starting…' });
       runCloudflarePublish(projectName, accountId || undefined, apiToken || undefined).catch((err) => {
-        setCfState({ status: 'error', message: 'Unexpected error.', error: String(err) });
+        const errStr = err instanceof Error ? (err.stack ?? err.message) : String(err);
+        cfLog('runCloudflarePublish threw:', errStr);
+        setCfState({ status: 'error', message: 'Unexpected error.', error: errStr });
       });
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ success: true }));
@@ -2570,7 +2690,53 @@ export const handleCloudflarePublishStatus: Connect.NextHandleFunction = (_req, 
   res.end(JSON.stringify(cfState));
 };
 
-export const handleCloudflareLoginStart: Connect.NextHandleFunction = (req, res) => {
+export const handleCloudflareLogout: Connect.NextHandleFunction = (_req, res) => {
+  (async () => {
+    res.setHeader('Content-Type', 'application/json');
+    const cwd = process.cwd();
+    // Strip any inherited CLOUDFLARE_API_TOKEN — when set, wrangler can't "log out"
+    // from a token-based session and exits non-zero. We want logout to wipe any
+    // OAuth credentials regardless of whether the parent process happens to have
+    // an API token in its env.
+    const env: NodeJS.ProcessEnv = { ...process.env, ...WRANGLER_NON_INTERACTIVE_ENV };
+    delete env.CLOUDFLARE_API_TOKEN;
+    delete env.CF_API_TOKEN;
+
+    let output = '';
+    let logoutErr: unknown = null;
+    try {
+      output = await spawnCmd('pnpm', ['exec', 'wrangler', 'logout'], { cwd, env, timeoutMs: 30_000 });
+    } catch (err) {
+      logoutErr = err;
+      output = String(err);
+    }
+
+    // Always reset the in-memory lock — the user's intent ("I want to be logged
+    // out") is satisfied either way, and stale state shouldn't trap them.
+    setCfState({ status: 'idle', message: '' });
+
+    // Treat "no active session" as success. Wrangler returns non-zero when there
+    // is nothing to log out from, but that's functionally the desired end state.
+    const lower = output.toLowerCase();
+    const benign =
+      lower.includes('not logged in') ||
+      lower.includes('not authenticated') ||
+      lower.includes('no user') ||
+      lower.includes('no auth config') ||
+      lower.includes('nothing to log out');
+
+    if (!logoutErr || benign) {
+      res.end(JSON.stringify({ success: true }));
+      return;
+    }
+
+    console.warn('[protovibe:cloudflare] wrangler logout failed:', logoutErr);
+    res.statusCode = 500;
+    res.end(JSON.stringify({ error: String(logoutErr) }));
+  })();
+};
+
+export const handleCloudflareLoginStart: Connect.NextHandleFunction = (_req, res) => {
   try {
     console.log('\n[protovibe:cloudflare] === Starting Login Process ===');
 
@@ -2605,7 +2771,9 @@ export const handleCloudflareLoginStart: Connect.NextHandleFunction = (req, res)
       FORCE_COLOR: '0',
       WRANGLER_SEND_METRICS: 'false',
       DO_NOT_TRACK: '1',
-      NODE_OPTIONS: `${existingNodeOptions} --require "${spoofScriptPath}"`.trim()
+      // NODE_OPTIONS uses shell-style word splitting and trips on Windows backslashes
+      // even inside quotes; forward slashes are accepted by Node's require on Windows.
+      NODE_OPTIONS: `${existingNodeOptions} --require "${spoofScriptPath.replace(/\\/g, '/')}"`.trim()
     };
     delete env.CI; // Must unset CI to force interactive behavior for the login flow
 

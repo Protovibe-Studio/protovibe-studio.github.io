@@ -29,7 +29,7 @@ export async function fetchComponents() {
 }
 
 export async function blockAction(action: string, blockId: string | string[], file: string, text?: string, locInfo?: { startLine?: number; nameEnd?: number[] }) {
-  const payload = Array.isArray(blockId)
+  const payload: Record<string, unknown> = Array.isArray(blockId)
     ? { action, blockIds: blockId, file, text }
     : { action, blockId, file, text };
   if (locInfo) {
@@ -271,6 +271,14 @@ export async function startCloudflarePublish(accountId?: string, apiToken?: stri
 export async function startCloudflareLogin(): Promise<void> {
   const res = await fetch('/__cloudflare-login-start', { method: 'POST' });
   if (!res.ok) throw new Error('Failed to start login');
+}
+
+export async function cloudflareLogout(): Promise<void> {
+  const res = await fetch('/__cloudflare-logout', { method: 'POST' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as any).error || 'Failed to log out');
+  }
 }
 
 export interface CloudflarePublishStatus {

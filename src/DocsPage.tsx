@@ -175,7 +175,7 @@ export default function DocsPage() {
                   {/* pv-editable-zone-start:9rrk2c */}
                   {/* pv-block-start:p1np04 */}
                   <p data-pv-block="p1np04" className="text-foreground-secondary leading-[1.7]">
-                    In Protovibe your projects is just a folder with code. To start visualy design it you need to run the development server, but you can do it without terminal. Open Protovibe and pick New project. You will be asked for a folder and a project name. Protovibe scaffolds a project template for you.
+                    Protovibe Studio is an <b className="text-foreground-default">indy open-source tool</b> that works on your <b className="text-foreground-default">localhost</b> - works on your own computer, withouth a cloud server, without subscription. So you can just ask your AI agent to edit your local files.<br /><br />In Protovibe your projects is just a folder with code. To start visualy design it you need to run the development server, but you can do it without terminal. Open Protovibe and pick New project. You will be asked for a folder and a project name. Protovibe scaffolds a project template for you.
                   </p>
                   {/* pv-block-end:p1np04 */}
                   {/* pv-block-start:504clx */}
