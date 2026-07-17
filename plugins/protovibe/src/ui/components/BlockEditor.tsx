@@ -18,7 +18,7 @@ const ToolbarButton: React.FC<ToolbarButtonProps> = ({ disabled, title, onActiva
   return (
     <button
       type="button"
-      title={title}
+      data-tooltip={title}
       disabled={disabled}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
@@ -165,8 +165,10 @@ export const BlockEditor: React.FC = () => {
       ? { startLine: activeData.startLine, nameEnd: activeData.nameEnd }
       : undefined;
 
+    const editedText = (el.textContent || '').trim();
+    const note = editedText ? `text "${editedText.length > 24 ? editedText.slice(0, 24) + '…' : editedText}"` : 'edit text';
     await runLockedMutation(async () => {
-      await takeSnapshot(activeData.file, activeSourceId!);
+      await takeSnapshot(activeData.file, activeSourceId!, undefined, note);
       await blockAction('edit-text', closestBlockId || '', activeData.file, newHtml, locInfo);
       originalHtmlRef.current = newHtml;
     });

@@ -66,7 +66,7 @@ export const SizePosition: React.FC<{ v: any; domV?: any }> = ({ v, domV }) => {
     if (oldClass === newClass) return;
 
     await runLockedMutation(async () => {
-      await takeSnapshot(activeData.file, activeSourceId);
+      await takeSnapshot(activeData.file, activeSourceId, undefined, newClass || `remove ${oldClass}`);
       let action: 'add' | 'edit' | 'remove' = 'edit';
       if (!oldClass && newClass) action = 'add';
       if (oldClass && !newClass) action = 'remove';
@@ -79,7 +79,7 @@ export const SizePosition: React.FC<{ v: any; domV?: any }> = ({ v, domV }) => {
       <button
         ref={ratioBtnRef}
         onClick={() => setIsRatioOpen(o => !o)}
-        title="Aspect ratio"
+        data-tooltip="Aspect ratio"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -130,7 +130,7 @@ export const SizePosition: React.FC<{ v: any; domV?: any }> = ({ v, domV }) => {
       {hasRatio && (
         <button
           onClick={() => handleSetRatio('')}
-          title="Clear aspect ratio"
+          data-tooltip="Clear aspect ratio"
           style={{
             display: 'flex',
             alignItems: 'center',

@@ -17,6 +17,43 @@ import { parseThemeColors, parseThemeTokens, updateCssVariable } from './css-the
 
 function logUndoDebug(_event: string, _details: Record<string, unknown>): void {}
 
+export type SnapshotFiles = { file: string; content: string }[];
+
+// Returns true when the two file sets carry identical content for the same files.
+function filesIdentical(a: SnapshotFiles, b: SnapshotFiles): boolean {
+  if (a.length !== b.length) return false;
+  return a.every(f => {
+    const match = b.find(bf => bf.file === f.file);
+    return match && match.content === f.content;
+  });
+}
+
+// Push a pre-edit snapshot onto the undo stack. Snapshots whose content is
+// identical to the current top entry are NOT duplicated — they only annotate
+// the existing entry with the new note/activeId. This keeps pure selection
+// changes (which re-snapshot identical content) from polluting the stack.
+export function pushUndoSnapshot(
+  files: SnapshotFiles,
+  activeId: string,
+  note: string | undefined,
+  currentURLQueryString: string | undefined,
+): void {
+  if (files.length === 0) return;
+
+  const top = undoStack[undoStack.length - 1];
+  if (top && filesIdentical(files, top.files)) {
+    // Same content already captured — annotate the existing checkpoint with the
+    // edit that is about to modify it instead of pushing a duplicate.
+    if (note) top.note = note;
+    top.activeId = activeId;
+    if (currentURLQueryString !== undefined) top.currentURLQueryString = currentURLQueryString;
+    return;
+  }
+
+  undoStack.push({ files, activeId, note, currentURLQueryString });
+  redoStack.length = 0;
+}
+
 const RICH_TEXT_TAG_WHITELIST = new Set(['b', 'strong', 'i', 'em', 'u', 'a', 'span', 'br']);
 const VOID_RICH_TEXT_TAGS = new Set(['br']);
 const LINK_DEFAULT_CLASSNAME = 'text-foreground-primary-link hover:opacity-80 transition-opacity';
@@ -122,7 +159,7 @@ export const handleTakeSnapshot: Connect.NextHandleFunction = (req, res) => {
   req.on('data', chunk => { body += chunk; });
   req.on('end', () => {
     try {
-      const { file, files: filesArr, activeId, currentURLQueryString } = JSON.parse(body || '{}');
+      const { file, files: filesArr, activeId, currentURLQueryString, note } = JSON.parse(body || '{}');
       // Deduplicate to prevent double-restores corrupting the redo stack
       const toSnapshot: string[] = Array.from(new Set(filesArr ?? (file ? [file] : [])));
       const files = toSnapshot.map((f: string) => {
@@ -130,36 +167,7 @@ export const handleTakeSnapshot: Connect.NextHandleFunction = (req, res) => {
         return { file: f, content: fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, 'utf-8') : '' };
       });
 
-      if (files.length > 0) {
-        const lastState = undoStack[undoStack.length - 1];
-        let isIdentical = false;
-
-        if (lastState && lastState.files.length === files.length) {
-          isIdentical = files.every(f => {
-            const match = lastState.files.find(lf => lf.file === f.file);
-            return match && match.content === f.content;
-          });
-        }
-
-        if (!isIdentical || (lastState && lastState.activeId !== (activeId || ''))) {
-          undoStack.push({ files, activeId: activeId || '', currentURLQueryString });
-          redoStack.length = 0;
-          logUndoDebug('snapshot-created', {
-            source: 'server',
-            activeId: activeId || '',
-            files: files.map((file) => ({ file: file.file, existed: file.content !== '', size: file.content.length })),
-            undoDepth: undoStack.length,
-            redoDepth: redoStack.length,
-          });
-        } else {
-          logUndoDebug('snapshot-skipped-identical', {
-            source: 'server',
-            activeId: activeId || '',
-            files: files.map((file) => file.file),
-            undoDepth: undoStack.length,
-          });
-        }
-      }
+      pushUndoSnapshot(files, activeId || '', note, currentURLQueryString);
 
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ success: true }));
@@ -170,9 +178,23 @@ export const handleTakeSnapshot: Connect.NextHandleFunction = (req, res) => {
   });
 };
 
+// True when restoring this snapshot would actually change a file on disk.
+function snapshotChangesDisk(files: SnapshotFiles): boolean {
+  return files.some(({ file, content: savedContent }) => {
+    const absolutePath = path.resolve(process.cwd(), file);
+    const currentContent = fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, 'utf-8') : '';
+    return savedContent !== currentContent;
+  });
+}
+
 export const handleUndo: Connect.NextHandleFunction = (req, res) => {
   try {
-    const lastState = undoStack.pop();
+    // Skip checkpoints that don't actually change any file (e.g. snapshots
+    // captured on pure selection changes) and undo to the last real edit.
+    let lastState = undoStack.pop();
+    while (lastState && !snapshotChangesDisk(lastState.files)) {
+      lastState = undoStack.pop();
+    }
     if (!lastState) {
       logUndoDebug('undo-empty', {
         undoDepth: undoStack.length,
@@ -181,7 +203,7 @@ export const handleUndo: Connect.NextHandleFunction = (req, res) => {
       return res.end(JSON.stringify({ success: false, message: 'No more actions to undo.' }));
     }
 
-    const { files, activeId, currentURLQueryString } = lastState;
+    const { files, activeId, currentURLQueryString, note } = lastState;
     logUndoDebug('undo-start', {
       activeId,
       files: files.map((file) => file.file),
@@ -207,7 +229,7 @@ export const handleUndo: Connect.NextHandleFunction = (req, res) => {
       });
       return { file, content: currentContent };
     });
-    redoStack.push({ files: currentFiles, activeId, currentURLQueryString });
+    redoStack.push({ files: currentFiles, activeId, currentURLQueryString, note });
     logUndoDebug('undo-complete', {
       activeId,
       files: currentFiles.map((file) => file.file),
@@ -216,7 +238,7 @@ export const handleUndo: Connect.NextHandleFunction = (req, res) => {
     });
 
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ success: true, file: files[0]?.file, activeId, currentURLQueryString }));
+    res.end(JSON.stringify({ success: true, file: files[0]?.file, activeId, currentURLQueryString, note }));
   } catch (err) {
     res.statusCode = 500;
     res.end(JSON.stringify({ error: String(err) }));
@@ -225,12 +247,16 @@ export const handleUndo: Connect.NextHandleFunction = (req, res) => {
 
 export const handleRedo: Connect.NextHandleFunction = (req, res) => {
   try {
-    const nextState = redoStack.pop();
+    // Mirror undo: skip no-op states and redo to the next real edit.
+    let nextState = redoStack.pop();
+    while (nextState && !snapshotChangesDisk(nextState.files)) {
+      nextState = redoStack.pop();
+    }
     if (!nextState) {
       return res.end(JSON.stringify({ success: false, message: 'No more actions to redo.' }));
     }
 
-    const { files, activeId, currentURLQueryString } = nextState;
+    const { files, activeId, currentURLQueryString, note } = nextState;
     const currentFiles = files.map(({ file, content: savedContent }) => {
       const absolutePath = path.resolve(process.cwd(), file);
       const currentContent = fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath, 'utf-8') : '';
@@ -242,10 +268,10 @@ export const handleRedo: Connect.NextHandleFunction = (req, res) => {
       }
       return { file, content: currentContent };
     });
-    undoStack.push({ files: currentFiles, activeId, currentURLQueryString });
+    undoStack.push({ files: currentFiles, activeId, currentURLQueryString, note });
 
     res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ success: true, file: files[0]?.file, activeId, currentURLQueryString }));
+    res.end(JSON.stringify({ success: true, file: files[0]?.file, activeId, currentURLQueryString, note }));
   } catch (err) {
     res.statusCode = 500;
     res.end(JSON.stringify({ error: String(err) }));
@@ -254,7 +280,7 @@ export const handleRedo: Connect.NextHandleFunction = (req, res) => {
 
 // Scan src/ for the file that has a pvConfig with the given componentId.
 // This allows the inspector to find pvConfig regardless of barrel imports.
-async function findPvConfigByComponentId(componentId: string, server: import('vite').ViteDevServer): Promise<any> {
+export async function findPvConfigByComponentId(componentId: string, server: import('vite').ViteDevServer): Promise<any> {
   const srcPath = path.resolve(process.cwd(), 'src');
 
   const collectCandidates = (dir: string): string[] => {
@@ -862,14 +888,18 @@ export const handleWrapBlocks: Connect.NextHandleFunction = (req, res) => {
         // Universally strip sketchpad draggable attribute from the children
         newBlock = newBlock.replace(/\s*data-pv-sketchpad-el=(["'])[^"']*\1/g, '');
 
-        // Strip absolute positioning from the root element's style tag
+        // Strip absolute positioning from the root element's style tag. The
+        // wrapper is a flex-column (flow) container, so children also shed any
+        // enforced inline width/height — matching the drop-onto-flow-element
+        // path — otherwise a previously resized element keeps a fixed size
+        // that no longer makes sense inside auto-layout.
         const firstTagRegex = /(<[A-Za-z0-9_.-]+)([^>]*?)(>|\/>)/;
         newBlock = newBlock.replace(firstTagRegex, (match, tag, attrs, closing) => {
           const styleRegex = /style=\{\s*\{([\s\S]*?)\}\s*\}/;
           if (styleRegex.test(attrs)) {
             const newAttrs = attrs.replace(styleRegex, (_m: string, innerStyles: string) => {
               const cleaned = innerStyles
-                .replace(/(?:position|left|top|right|bottom|zIndex)\s*:\s*[^,}]*,?/g, '')
+                .replace(/(?:position|left|top|right|bottom|width|height|zIndex)\s*:\s*[^,}]*,?/g, '')
                 .trim()
                 .replace(/,$/, '')
                 .trim();
@@ -898,6 +928,169 @@ export const handleWrapBlocks: Connect.NextHandleFunction = (req, res) => {
       fs.writeFileSync(absolutePath, fileContent, 'utf-8');
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ success: true, wrapperId }));
+
+    } catch (err) {
+      res.statusCode = 500; res.end(JSON.stringify({ error: String(err) }));
+    }
+  });
+};
+
+// Rewrite a hoisted block's root opening tag for the layout mode it lands in:
+// 'flow' strips absolute positioning and the sketchpad drag attribute,
+// 'absolute' pins the element at the given coordinates and makes it draggable.
+const rehostBlockRoot = (
+  block: string,
+  target: 'flow' | 'absolute',
+  pos?: { left: number; top: number; width?: number | null }
+): string => {
+  let newBlock = block;
+  if (target === 'flow') {
+    newBlock = newBlock.replace(/\s*data-pv-sketchpad-el=(["'])[^"']*\1/g, '');
+  }
+  const firstTagRegex = /(<[A-Za-z0-9_.-]+)([^>]*?)(>|\/>)/;
+  return newBlock.replace(firstTagRegex, (match, tag, attrs, closing) => {
+    let newAttrs = attrs;
+    const styleRegex = /style=\{\s*\{([\s\S]*?)\}\s*\}/;
+    const hasStyle = styleRegex.test(newAttrs);
+
+    if (target === 'flow') {
+      if (!hasStyle) return match;
+      newAttrs = newAttrs.replace(styleRegex, (_m: string, innerStyles: string) => {
+        const cleaned = innerStyles
+          .replace(/(?:position|left|top|right|bottom|zIndex)\s*:\s*[^,}]*,?/g, '')
+          .trim().replace(/,$/, '').trim();
+        return cleaned ? `style={{ ${cleaned} }}` : '';
+      });
+      return `${tag}${newAttrs}${closing}`;
+    }
+
+    if (!newAttrs.includes('data-pv-sketchpad-el')) {
+      const blockIdMatch = newAttrs.match(/data-pv-block="([^"]+)"/);
+      if (blockIdMatch) newAttrs += ` data-pv-sketchpad-el="${blockIdMatch[1]}"`;
+    }
+    const left = Math.round(pos?.left ?? 100);
+    const top = Math.round(pos?.top ?? 100);
+    const width = pos?.width != null ? Math.round(pos.width) : null;
+    const positioning = `position: 'absolute', left: ${left}, top: ${top}${width != null ? `, width: ${width}` : ''}`;
+    if (hasStyle) {
+      const stripProps = width != null ? '(?:position|left|top|width)' : '(?:position|left|top)';
+      newAttrs = newAttrs.replace(styleRegex, (_m: string, innerStyles: string) => {
+        const cleaned = innerStyles
+          .replace(new RegExp(`${stripProps}\\s*:\\s*[^,}]*,?`, 'g'), '')
+          .trim().replace(/,$/, '').trim();
+        const separator = cleaned ? ', ' : '';
+        return `style={{ ${positioning}${separator}${cleaned} }}`;
+      });
+    } else {
+      newAttrs = `${newAttrs} style={{ ${positioning} }}`;
+    }
+    return `${tag}${newAttrs}${closing}`;
+  });
+};
+
+export const handleUnwrapBlock: Connect.NextHandleFunction = (req, res) => {
+  let body = '';
+  req.on('data', chunk => { body += chunk; });
+  req.on('end', () => {
+    try {
+      const { file, blockId, targetLayoutMode, childPositions } = JSON.parse(body || '{}') as {
+        file?: string;
+        blockId?: string;
+        targetLayoutMode?: 'flow' | 'absolute';
+        childPositions?: Record<string, { left: number; top: number; width?: number; wasAbsolute?: boolean }>;
+      };
+      if (!file || !blockId) {
+        return res.end(JSON.stringify({ success: false, error: 'Missing parameters' }));
+      }
+
+      const absolutePath = path.resolve(process.cwd(), file);
+      let fileContent = fs.readFileSync(absolutePath, 'utf-8');
+
+      const regex = new RegExp(`(?:\\n?)([ \\t]*)\\{\\/\\*\\s*pv-block-start:${blockId}\\s*\\*\\/\\}[\\s\\S]*?\\{\\/\\*\\s*pv-block-end:${blockId}\\s*\\*\\/\\}(?:\\n?)`);
+      const match = fileContent.match(regex);
+      if (!match || match.index === undefined) {
+        return res.end(JSON.stringify({ success: false, error: 'Block not found' }));
+      }
+      const baseSpaces = match[1] || '';
+      const wrapperText = match[0];
+
+      // Collect the wrapper's direct child blocks (depth 1 inside the wrapper);
+      // deeper blocks belong to those children and travel with them verbatim.
+      const tagRegex = /\{\/\*\s*pv-block-(start|end):([a-zA-Z0-9_-]+)\s*\*\/\}/g;
+      const children: { id: string; start: number; end: number }[] = [];
+      let open: { id: string; start: number } | null = null;
+      let depth = 0;
+      let tagMatch: RegExpExecArray | null;
+      while ((tagMatch = tagRegex.exec(wrapperText)) !== null) {
+        if (tagMatch[1] === 'start') {
+          depth++;
+          if (depth === 2 && !open) open = { id: tagMatch[2], start: tagMatch.index };
+        } else {
+          if (depth === 2 && open && tagMatch[2] === open.id) {
+            children.push({ id: open.id, start: open.start, end: tagMatch.index + tagMatch[0].length });
+            open = null;
+          }
+          depth--;
+        }
+      }
+
+      if (children.length === 0) {
+        return res.end(JSON.stringify({ success: false, error: 'Nothing to unwrap' }));
+      }
+
+      // Fallback position for children the client couldn't measure: offset
+      // their wrapper-relative coordinates by the wrapper's own left/top.
+      let wrapperLeft = 100, wrapperTop = 100;
+      const wrapperTagMatch = wrapperText.match(/(<[A-Za-z0-9_.-]+)([^>]*?)(>|\/>)/);
+      if (wrapperTagMatch) {
+        const styleMatch = wrapperTagMatch[2].match(/style=\{\s*\{([\s\S]*?)\}\s*\}/);
+        const leftMatch = styleMatch?.[1].match(/left:\s*(-?[\d.]+)/);
+        const topMatch = styleMatch?.[1].match(/top:\s*(-?[\d.]+)/);
+        if (leftMatch) wrapperLeft = parseFloat(leftMatch[1]);
+        if (topMatch) wrapperTop = parseFloat(topMatch[1]);
+      }
+
+      const hoisted = children.map(child => {
+        const lineStart = wrapperText.lastIndexOf('\n', child.start) + 1;
+        const indentText = wrapperText.slice(lineStart, child.start);
+        const childIndent = /^[ \t]*$/.test(indentText) ? indentText : '';
+        let blockText = wrapperText.slice(child.start, child.end);
+
+        if (targetLayoutMode === 'absolute') {
+          const measured = childPositions?.[child.id];
+          let pos: { left: number; top: number; width?: number | null };
+          if (measured) {
+            pos = {
+              left: measured.left,
+              top: measured.top,
+              width: measured.wasAbsolute ? null : (measured.width ?? null),
+            };
+          } else {
+            const childStyle = blockText.match(/(<[A-Za-z0-9_.-]+)([^>]*?)(>|\/>)/)?.[2].match(/style=\{\s*\{([\s\S]*?)\}\s*\}/)?.[1] || '';
+            const childLeft = parseFloat(childStyle.match(/left:\s*(-?[\d.]+)/)?.[1] ?? '0');
+            const childTop = parseFloat(childStyle.match(/top:\s*(-?[\d.]+)/)?.[1] ?? '0');
+            pos = { left: wrapperLeft + childLeft, top: wrapperTop + childTop, width: null };
+          }
+          blockText = rehostBlockRoot(blockText, 'absolute', pos);
+        } else {
+          blockText = rehostBlockRoot(blockText, 'flow');
+        }
+
+        // Re-anchor the child's indentation at the wrapper's own level.
+        return blockText.split('\n').map((line, idx) => {
+          if (idx === 0) return baseSpaces + line;
+          if (childIndent && line.startsWith(childIndent)) return baseSpaces + line.slice(childIndent.length);
+          return line;
+        }).join('\n');
+      });
+
+      const spliceIndex = match.index;
+      fileContent = fileContent.slice(0, spliceIndex) + '\n' + hoisted.join('\n') + '\n' + fileContent.slice(spliceIndex + wrapperText.length);
+      fileContent = cleanupZonesAtAnchors(fileContent, [spliceIndex + 1]);
+
+      fs.writeFileSync(absolutePath, fileContent, 'utf-8');
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: true, blockIds: children.map(c => c.id) }));
 
     } catch (err) {
       res.statusCode = 500; res.end(JSON.stringify({ error: String(err) }));
@@ -1767,20 +1960,22 @@ export const handleBlockAction: Connect.NextHandleFunction = (req, res) => {
         });
 
         let targetNode: any = null;
-        babel.traverse(ast!, {
-          JSXOpeningElement(p) {
-            const hasBlockId = p.node.attributes.some(attr =>
-              babel.types.isJSXAttribute(attr) &&
-              attr.name.name === 'data-pv-block' &&
-              babel.types.isStringLiteral(attr.value) &&
-              attr.value.value === blockId
-            );
-            if (hasBlockId) {
-              targetNode = p.parentPath.node; // Get the full JSXElement
-              p.stop();
+        if (blockId) {
+          babel.traverse(ast!, {
+            JSXOpeningElement(p) {
+              const hasBlockId = p.node.attributes.some(attr =>
+                babel.types.isJSXAttribute(attr) &&
+                attr.name.name === 'data-pv-block' &&
+                babel.types.isStringLiteral(attr.value) &&
+                attr.value.value === blockId
+              );
+              if (hasBlockId) {
+                targetNode = p.parentPath.node; // Get the full JSXElement
+                p.stop();
+              }
             }
-          }
-        });
+          });
+        }
 
         if (!targetNode && startLine) {
           const hintCol: number = Array.isArray(nameEnd) ? Number(nameEnd[1]) : -1;
@@ -1951,36 +2146,58 @@ function extractDefaultContentSource(source: string): string {
   let jsx = source.substring(start, i).trim();
   // Strip outer Fragment wrapper <> ... </>
   jsx = jsx.replace(/^\s*<>\s*/, '').replace(/\s*<\/>\s*$/, '');
-  return jsx.trim();
+  return sanitizeDefaultContentJsx(jsx.trim());
 }
 
 /**
  * Extracts the inner JSX from an `export function PvDefaultContent()` component.
- * Finds the function's return statement and extracts the parenthesized JSX body,
- * stripping any outer Fragment wrapper.
+ * Finds the function's return statement and extracts the JSX body (parenthesized
+ * or not), stripping any outer Fragment wrapper.
  */
 function extractPvDefaultContentSource(source: string): string {
   const fnMatch = source.match(/export\s+function\s+PvDefaultContent\s*\(/);
   if (!fnMatch || fnMatch.index === undefined) return '';
   // Find the opening brace of the function body
-  let i = source.indexOf('{', fnMatch.index + fnMatch[0].length);
-  if (i === -1) return '';
-  // Find `return (` inside the function body
-  const returnMatch = source.substring(i).match(/return\s*\(/);
-  if (!returnMatch || returnMatch.index === undefined) return '';
-  const returnStart = i + returnMatch.index + returnMatch[0].length;
-  // Match parentheses to find the end of the return expression
-  let depth = 0;
-  let j = returnStart;
-  while (j < source.length) {
-    if (source[j] === '(') depth++;
-    else if (source[j] === ')') {
-      if (depth === 0) break;
-      depth--;
-    }
-    j++;
+  const bodyStart = source.indexOf('{', fnMatch.index + fnMatch[0].length);
+  if (bodyStart === -1) return '';
+  // Find the matching closing brace so the scan stays inside PvDefaultContent —
+  // otherwise a sibling function (e.g. PvPreviewWrapper) can leak in.
+  let braceDepth = 1;
+  let bodyEnd = bodyStart + 1;
+  while (bodyEnd < source.length && braceDepth > 0) {
+    const ch = source[bodyEnd];
+    if (ch === '{') braceDepth++;
+    else if (ch === '}') braceDepth--;
+    bodyEnd++;
   }
-  let jsx = source.substring(returnStart, j);
+  if (braceDepth !== 0) return '';
+  const body = source.substring(bodyStart + 1, bodyEnd - 1);
+
+  // Locate the `return` keyword inside the body
+  const returnKwMatch = body.match(/\breturn\b\s*/);
+  if (!returnKwMatch || returnKwMatch.index === undefined) return '';
+  const afterReturn = returnKwMatch.index + returnKwMatch[0].length;
+  let jsx: string;
+  if (body[afterReturn] === '(') {
+    // `return (JSX)` — match the parens
+    let depth = 0;
+    let j = afterReturn + 1;
+    while (j < body.length) {
+      if (body[j] === '(') depth++;
+      else if (body[j] === ')') {
+        if (depth === 0) break;
+        depth--;
+      }
+      j++;
+    }
+    jsx = body.substring(afterReturn + 1, j);
+  } else {
+    // `return JSX;` / `return null;` / `return;` — take until terminating `;`
+    let j = afterReturn;
+    while (j < body.length && body[j] !== ';') j++;
+    jsx = body.substring(afterReturn, j).trim();
+    if (!jsx || jsx === 'null' || jsx === 'undefined') return '';
+  }
   // Strip outer Fragment wrapper — remove only the <> and </> tags/lines
   jsx = jsx.replace(/^[\s\S]*?<>[ \t]*\n?/, '').replace(/\n?[ \t]*<\/>[\s\S]*$/, '');
   // Dedent: strip the common leading whitespace so the content is indentation-neutral
@@ -1995,7 +2212,33 @@ function extractPvDefaultContentSource(source: string): string {
       jsx = jsxLines.map(l => l.length > 0 ? l.slice(minIndent) : l).join('\n');
     }
   }
-  return jsx.trim();
+  return sanitizeDefaultContentJsx(jsx.trim());
+}
+
+/**
+ * Ensures extracted defaultContent JSX won't reference identifiers that are
+ * undefined at the insertion site (app page or sketchpad frame). If it does
+ * (e.g. `{children}` leaked in from a sibling wrapper), the content is
+ * rejected with a console warning rather than producing a broken file.
+ */
+function sanitizeDefaultContentJsx(jsx: string): string {
+  if (!jsx) return jsx;
+  // Detect bare JSX expressions referencing forbidden free identifiers.
+  // Allows e.g. `children={...}` (prop) and `props.foo` (member access) — only
+  // the standalone reference inside an expression container is a problem.
+  const forbidden = ['children', 'props'];
+  for (const name of forbidden) {
+    const re = new RegExp(`\\{\\s*${name}\\s*\\}`);
+    if (re.test(jsx)) {
+      console.warn(
+        `Protovibe: refusing to inject defaultContent that references free identifier "${name}". ` +
+        `Check PvDefaultContent in the component's source — it likely returns JSX without parentheses, ` +
+        `causing the extractor to read from a sibling function.`,
+      );
+      return '';
+    }
+  }
+  return jsx;
 }
 
 export const handleGetComponents = (req: any, res: any, server: import('vite').ViteDevServer) => {
@@ -2076,8 +2319,7 @@ export const handleUpdateThemeColor: Connect.NextHandleFunction = (req, res) => 
       const cssFilePath = path.resolve(process.cwd(), 'src/index.css');
       const selector = themeMode === 'light' ? '[data-theme="light"]' : '[data-theme="dark"]';
       const css = fs.readFileSync(cssFilePath, 'utf-8');
-      undoStack.push({ files: [{ file: 'src/index.css', content: css }], activeId: '' });
-      redoStack.length = 0;
+      pushUndoSnapshot([{ file: 'src/index.css', content: css }], '', value, undefined);
       const updated = updateCssVariable(css, selector, tokenName, value);
       fs.writeFileSync(cssFilePath, updated, 'utf-8');
       res.setHeader('Content-Type', 'application/json');
@@ -2202,8 +2444,7 @@ export const handleUpdateThemeToken: Connect.NextHandleFunction = (req, res) => 
       const { tokenName, value } = JSON.parse(body);
       const cssFilePath = path.resolve(process.cwd(), 'src/index.css');
       const css = fs.readFileSync(cssFilePath, 'utf-8');
-      undoStack.push({ files: [{ file: 'src/index.css', content: css }], activeId: '' });
-      redoStack.length = 0;
+      pushUndoSnapshot([{ file: 'src/index.css', content: css }], '', `${tokenName} ${value}`, undefined);
       const updated = updateCssVariable(css, '@theme', tokenName, value);
       fs.writeFileSync(cssFilePath, updated, 'utf-8');
       res.setHeader('Content-Type', 'application/json');
@@ -2244,8 +2485,7 @@ export const handleUpdateFontFamily: Connect.NextHandleFunction = (req, res) => 
       const { tokenName, value, googleFontName } = JSON.parse(body);
       const cssFilePath = path.resolve(process.cwd(), 'src/index.css');
       let css = fs.readFileSync(cssFilePath, 'utf-8');
-      undoStack.push({ files: [{ file: 'src/index.css', content: css }], activeId: '' });
-      redoStack.length = 0;
+      pushUndoSnapshot([{ file: 'src/index.css', content: css }], '', googleFontName || value, undefined);
       // Remove existing managed import for this slot
       css = removeGoogleFontImport(css, tokenName);
       // Add new import if a Google Font was selected
@@ -2361,10 +2601,11 @@ function parseWranglerAccounts(output: string): Array<{ id: string; name: string
     if (line.includes('Account Name') && line.includes('Account ID')) { seenHeader = true; continue; }
     if (!seenHeader) continue;
     if (/^[-|⎯\s]+$/.test(line)) continue;
-    const parts = line.split('|');
+    // Wrangler draws its table with box-drawing characters (│), not ASCII pipes.
+    const parts = line.split(/[|│]/).map((p) => p.trim()).filter(Boolean);
     if (parts.length >= 2) {
-      const name = parts[0].trim();
-      const id = parts[1].trim();
+      const name = parts[0];
+      const id = parts[1];
       if (name && /^[a-f0-9]{32}$/i.test(id)) accounts.push({ id, name });
     }
   }
@@ -2378,13 +2619,93 @@ const WRANGLER_NON_INTERACTIVE_ENV: Record<string, string> = {
   DO_NOT_TRACK: '1',
 };
 
-function spawnCmd(
+interface CfDeployHistoryEntry { url: string; publishedAt?: string }
+
+/** History entries were plain URL strings before publish dates were tracked; accept both shapes. */
+function normalizeDeployHistory(raw: unknown): CfDeployHistoryEntry[] {
+  if (!Array.isArray(raw)) return [];
+  const entries: CfDeployHistoryEntry[] = [];
+  for (const item of raw) {
+    if (typeof item === 'string') {
+      entries.push({ url: item });
+    } else if (item && typeof item === 'object' && typeof (item as any).url === 'string') {
+      entries.push({
+        url: (item as any).url,
+        publishedAt: typeof (item as any).publishedAt === 'string' ? (item as any).publishedAt : undefined,
+      });
+    }
+  }
+  return entries;
+}
+
+// ─── Cloudflare auth status ───────────────────────────────────────────────────
+// `wrangler whoami` takes a few seconds, so the result is cached; the cache is
+// invalidated whenever login/logout changes the underlying state.
+
+interface CfAuthStatus {
+  loggedIn: boolean;
+  email?: string;
+  accounts?: Array<{ id: string; name: string }>;
+}
+
+let cfAuthCache: { result: CfAuthStatus; ts: number } | null = null;
+const CF_AUTH_CACHE_TTL_MS = 5 * 60 * 1000;
+
+function invalidateCfAuthCache(): void {
+  cfAuthCache = null;
+}
+
+async function checkCloudflareAuth(): Promise<CfAuthStatus> {
+  const out = await spawnCmd('pnpm', ['exec', 'wrangler', 'whoami'], {
+    cwd: process.cwd(),
+    env: { ...process.env, ...WRANGLER_NON_INTERACTIVE_ENV },
+    timeoutMs: 30_000,
+  });
+  if (out.includes('You are not authenticated') || out.includes('not logged in')) {
+    return { loggedIn: false };
+  }
+  const emailMatch = out.match(/associated with the email\s+'?([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})'?/i);
+  return {
+    loggedIn: true,
+    email: emailMatch?.[1],
+    accounts: parseWranglerAccounts(out),
+  };
+}
+
+export const handleCloudflareAuthStatus: Connect.NextHandleFunction = (req, res) => {
+  (async () => {
+    res.setHeader('Content-Type', 'application/json');
+    const wantsRefresh = (req.url ?? '').includes('refresh=1');
+    if (!wantsRefresh && cfAuthCache && Date.now() - cfAuthCache.ts < CF_AUTH_CACHE_TTL_MS) {
+      return res.end(JSON.stringify(cfAuthCache.result));
+    }
+    let result: CfAuthStatus;
+    try {
+      result = await checkCloudflareAuth();
+    } catch (err) {
+      // whoami exits non-zero when not authenticated; treat any failure as
+      // logged-out rather than surfacing an error — the UI then shows the
+      // intro/connect view, which is always a safe place to land.
+      const errStr = String(err);
+      if (!/not authenticated|not logged in/i.test(errStr)) {
+        cfLog('auth-status whoami failed:', errStr);
+      }
+      result = { loggedIn: false };
+    }
+    cfAuthCache = { result, ts: Date.now() };
+    res.end(JSON.stringify(result));
+  })();
+};
+
+export function spawnCmd(
   cmd: string,
   args: string[],
-  opts: { cwd: string; env?: NodeJS.ProcessEnv; onData?: (chunk: string) => void; timeoutMs?: number },
+  opts: { cwd: string; env?: NodeJS.ProcessEnv; onData?: (chunk: string) => void; timeoutMs?: number; shell?: boolean },
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env, stdio: 'pipe', shell: process.platform === 'win32' });
+    // shell is only needed for .cmd shims (pnpm/wrangler) on Windows; callers
+    // passing secrets in argv (git auth headers) must opt out of it.
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env, stdio: 'pipe', shell: opts.shell ?? process.platform === 'win32' });
     let out = '';
     let settled = false;
     const settle = (fn: typeof resolve | typeof reject, val: string | Error) => {
@@ -2444,6 +2765,7 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
     whoami = await spawnCmd('pnpm', ['exec', 'wrangler', 'whoami'], { cwd, env: baseEnv, timeoutMs: 30_000 });
 
     if (whoami.includes('You are not authenticated') || whoami.includes('not logged in')) {
+      invalidateCfAuthCache();
       if (apiToken) {
         setCfState({ status: 'error', message: 'Invalid Cloudflare API Token.', error: whoami });
         return;
@@ -2459,6 +2781,7 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
     }
     // Distinguish between "not logged in" and genuine failures (network, wrangler crash)
     if (errStr.includes('not authenticated') || errStr.includes('not logged in')) {
+      invalidateCfAuthCache();
       setCfState({ status: 'not-logged-in', message: 'You are not logged in to Cloudflare.' });
     } else {
       setCfState({ status: 'error', message: 'Failed to verify Cloudflare credentials.', error: errStr });
@@ -2594,10 +2917,12 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
     }
 
     const meta = readPublishMeta();
+    const publishedAt = new Date().toISOString();
     meta['cloudflare-pages-url'] = canonicalUrl;
-    const history: string[] = Array.isArray(meta['cloudflare-deploy-history']) ? meta['cloudflare-deploy-history'] : [];
-    if (hashedUrl && hashedUrl !== canonicalUrl && !history.includes(hashedUrl)) {
-      history.unshift(hashedUrl);
+    meta['cloudflare-last-published-at'] = publishedAt;
+    const history = normalizeDeployHistory(meta['cloudflare-deploy-history']);
+    if (hashedUrl && hashedUrl !== canonicalUrl && !history.some((h) => h.url === hashedUrl)) {
+      history.unshift({ url: hashedUrl, publishedAt });
       if (history.length > 20) history.pop();
     }
     meta['cloudflare-deploy-history'] = history;
@@ -2616,7 +2941,8 @@ export const handleCloudflarePublishMetadata: Connect.NextHandleFunction = (_req
     res.end(JSON.stringify({
       projectName: pkg['cloudflare-wrangler-project-name'] ?? '',
       url: pkg['cloudflare-pages-url'] ?? '',
-      deployHistory: Array.isArray(pkg['cloudflare-deploy-history']) ? pkg['cloudflare-deploy-history'] : [],
+      lastPublishedAt: pkg['cloudflare-last-published-at'] ?? '',
+      deployHistory: normalizeDeployHistory(pkg['cloudflare-deploy-history']),
     }));
   } catch (err) {
     res.statusCode = 500;
@@ -2714,6 +3040,7 @@ export const handleCloudflareLogout: Connect.NextHandleFunction = (_req, res) =>
     // Always reset the in-memory lock — the user's intent ("I want to be logged
     // out") is satisfied either way, and stale state shouldn't trap them.
     setCfState({ status: 'idle', message: '' });
+    invalidateCfAuthCache();
 
     // Treat "no active session" as success. Wrangler returns non-zero when there
     // is nothing to log out from, but that's functionally the desired end state.
@@ -2829,6 +3156,7 @@ export const handleCloudflareLoginStart: Connect.NextHandleFunction = (_req, res
     child.on('close', (code) => {
       clearTimeout(loginTimer);
       console.log(`[protovibe:cloudflare] Process exited with code ${code}`);
+      invalidateCfAuthCache();
 
       // Clean up the temporary script
       try { if (fs.existsSync(spoofScriptPath)) fs.unlinkSync(spoofScriptPath); } catch {}

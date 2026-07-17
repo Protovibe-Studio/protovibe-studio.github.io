@@ -1,11 +1,11 @@
 // plugins/protovibe/src/ui/components/ShellNavBar.tsx
 import React, { useEffect, useState } from 'react';
-import { Monitor, LayoutGrid, Palette, Paintbrush, Play, Pause, PenTool, Sparkles, ChevronDown, ArrowLeft } from 'lucide-react';
+import { Monitor, LayoutGrid, Palette, Paintbrush, Play, Pause, PenTool, Sparkles, ChevronDown, ArrowLeft, MessageSquare } from 'lucide-react';
 import { theme } from '../theme';
 import { PublishButton } from './PublishButton';
 
 export type IframeTab = 'app' | 'components' | 'sketchpad';
-export type SidebarTab = 'design' | 'tokens' | 'prompts';
+export type SidebarTab = 'design' | 'tokens' | 'prompts' | 'comments';
 
 /** @deprecated Use IframeTab / SidebarTab instead */
 export type ShellTab = IframeTab | SidebarTab;
@@ -20,6 +20,7 @@ const SIDEBAR_TABS: { id: SidebarTab; icon: React.ElementType; label: string }[]
   { id: 'design', icon: Paintbrush, label: 'Design' },
   { id: 'tokens', icon: Palette, label: 'Tokens' },
   { id: 'prompts', icon: Sparkles, label: 'Prompts' },
+  { id: 'comments', icon: MessageSquare, label: 'Comments' },
 ];
 
 type ShellNavBarProps = {
@@ -27,6 +28,7 @@ type ShellNavBarProps = {
   onIframeTabChange: (tab: IframeTab) => void;
   activeSidebarTab: SidebarTab;
   onSidebarTabChange: (tab: SidebarTab) => void;
+  unreadComments?: number;
   inspectorOpen?: boolean;
   onToggleInspector?: () => void;
 };
@@ -37,12 +39,14 @@ function TabButton({
   label,
   isActive,
   onClick,
+  dot,
 }: {
   id: string;
   icon: React.ElementType;
   label: string;
   isActive: boolean;
   onClick: () => void;
+  dot?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -50,10 +54,10 @@ function TabButton({
       key={id}
       data-testid={`tab-${id}`}
       onClick={onClick}
-      title={label}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
+        position: 'relative',
         display: 'flex',
         alignItems: 'center',
         gap: '6px',
@@ -70,7 +74,23 @@ function TabButton({
         transition: 'background-color 0.15s ease, color 0.15s ease',
       }}
     >
-      <Icon size={14} strokeWidth={isActive ? 2 : 1.7} />
+      <span style={{ position: 'relative', display: 'flex' }}>
+        <Icon size={14} strokeWidth={isActive ? 2 : 1.7} />
+        {dot && (
+          <span
+            style={{
+              position: 'absolute',
+              top: -4,
+              right: -5,
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: theme.accent_default,
+              border: `1.5px solid ${theme.bg_strong}`,
+            }}
+          />
+        )}
+      </span>
       {label}
     </button>
   );
@@ -83,12 +103,12 @@ export const ShellNavBar: React.FC<ShellNavBarProps> = ({
   onIframeTabChange,
   activeSidebarTab,
   onSidebarTabChange,
+  unreadComments = 0,
   inspectorOpen,
   onToggleInspector,
 }) => {
   const [projectName, setProjectName] = useState('');
   const [pluginVersion, setPluginVersion] = useState('');
-  const [pluginLastUpdated, setPluginLastUpdated] = useState('');
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [logoHovered, setLogoHovered] = useState(false);
   const [inspectorHovered, setInspectorHovered] = useState(false);
@@ -104,8 +124,6 @@ export const ShellNavBar: React.FC<ShellNavBarProps> = ({
         if (typeof n === 'string' && n.trim()) setProjectName(n.trim());
         const v = d?.['plugin-version'];
         if (typeof v === 'string' && v.trim()) setPluginVersion(v.trim());
-        const lu = d?.['plugin-last-updated'];
-        if (typeof lu === 'string' && lu.trim()) setPluginLastUpdated(lu.trim());
       })
       .catch(() => {});
   }, []);
@@ -241,7 +259,7 @@ export const ShellNavBar: React.FC<ShellNavBarProps> = ({
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}
-              title={projectName || 'Untitled project'}
+              data-tooltip={projectName || 'Untitled project'}
             >
               {projectName || 'Untitled project'}
             </div>
@@ -255,11 +273,6 @@ export const ShellNavBar: React.FC<ShellNavBarProps> = ({
                 }}
               >
                 Protovibe v{pluginVersion}
-                {pluginLastUpdated && (
-                  <span style={{ marginLeft: '8px', opacity: 0.7 }}>
-                    synced {pluginLastUpdated}
-                  </span>
-                )}
               </div>
             )}
             {projectManagerAvailable && (
@@ -329,6 +342,7 @@ export const ShellNavBar: React.FC<ShellNavBarProps> = ({
           label={label}
           isActive={activeSidebarTab === id}
           onClick={() => onSidebarTabChange(id)}
+          dot={id === 'comments' && unreadComments > 0}
         />
       ))}
 
@@ -341,7 +355,7 @@ export const ShellNavBar: React.FC<ShellNavBarProps> = ({
           onClick={onToggleInspector}
           onMouseEnter={() => setInspectorHovered(true)}
           onMouseLeave={() => setInspectorHovered(false)}
-          title={inspectorOpen ? 'Enable live preview' : 'Back to editor'}
+          data-tooltip={inspectorOpen ? 'Enable live preview' : 'Back to editor'}
           style={{
             marginLeft: '4px',
             display: 'flex',
@@ -353,7 +367,7 @@ export const ShellNavBar: React.FC<ShellNavBarProps> = ({
             border: 'none',
             cursor: 'pointer',
             backgroundColor: !inspectorOpen ? theme.bg_tertiary : inspectorHovered ? 'rgba(255,255,255,0.08)' : 'transparent',
-            color: !inspectorOpen ? theme.text_default : theme.text_tertiary,
+            color: !inspectorOpen ? theme.text_default : theme.text_secondary,
             transition: 'background-color 0.15s ease, color 0.15s ease',
           }}
         >

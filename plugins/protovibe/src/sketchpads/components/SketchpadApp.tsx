@@ -186,7 +186,7 @@ export function SketchpadApp() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [showAddMenu, setShowAddMenu] = useState(false);
-  const [showComponentPalette, setShowComponentPalette] = useState(false);
+  const [showComponentPalette, setShowComponentPalette] = useState(true);
   const [renamePrompt, setRenamePrompt] = useState<{ frameId: string, name: string } | null>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const [pendingAction, setPendingAction] = useState<
@@ -301,11 +301,14 @@ export function SketchpadApp() {
         }
         loadAllFrameModules(initial.id, initial.frames);
       } else {
-        const sp = await api.createSketchpad('Sketchpad 1');
-        const frame = await api.createFrame(sp.id, 'Frame 1', 1440, 900, 0, 0);
-        setSketchpads([{ ...sp, frames: [frame] }]);
+        // Initial bootstrap — not an undoable user action.
+        const sp = await api.createSketchpad('Sketchpad 1', {
+          withFrame: { name: 'Frame 1', width: 1440, height: 900, canvasX: 0, canvasY: 0 },
+          skipSnapshot: true,
+        });
+        setSketchpads([sp]);
         setActiveSketchpadId(sp.id);
-        loadAllFrameModules(sp.id, [frame]);
+        loadAllFrameModules(sp.id, sp.frames);
       }
     });
   }, [loadAllFrameModules]);
@@ -442,6 +445,59 @@ export function SketchpadApp() {
   useEffect(() => { transformRef.current = transform; }, [transform]);
   const activeSketchpadRef = useRef(activeSketchpad);
   useEffect(() => { activeSketchpadRef.current = activeSketchpad; }, [activeSketchpad]);
+  const sketchpadsRef = useRef(sketchpads);
+  useEffect(() => { sketchpadsRef.current = sketchpads; }, [sketchpads]);
+
+  // A comment in the Comments panel was opened — bring its frame (and the
+  // commented element's coordinates) into view: switch sketchpad if needed,
+  // select the frame, and re-center the canvas on the anchored point.
+  useEffect(() => {
+    const onFocus = (e: MessageEvent) => {
+      if (e.data?.type !== 'PV_SKETCHPAD_FOCUS') return;
+      const { sketchpadId, frameId, position } = e.data as {
+        sketchpadId?: string;
+        frameId?: string;
+        position?: { x: number; y: number };
+      };
+      const sp = sketchpadId
+        ? sketchpadsRef.current.find((s) => s.id === sketchpadId)
+        : activeSketchpadRef.current;
+      if (!sp) return;
+
+      if (sp.id !== activeSketchpadId) {
+        setActiveSketchpadId(sp.id);
+        setSelectedFrameIds([]);
+        loadAllFrameModules(sp.id, sp.frames);
+      }
+
+      const frame = frameId ? sp.frames.find((f) => f.id === frameId) : sp.frames[0];
+      if (!frame) return;
+
+      // Wait for the iframe to have real dimensions (it may have just been
+      // un-hidden by the tab switch), then center on the element's point.
+      let tries = 0;
+      const apply = () => {
+        const rect = containerRef.current?.getBoundingClientRect();
+        if (!rect || rect.width <= 0 || rect.height <= 0) {
+          if (tries++ < 20) setTimeout(apply, 80);
+          return;
+        }
+        setSelectedFrameIds([frame.id]);
+        const zoom = 0.8;
+        const px = frame.canvasX + (position ? position.x : frame.width / 2);
+        const py = frame.canvasY + (position ? position.y : frame.height / 2);
+        setTransform({
+          zoom,
+          panX: rect.width / 2 - px * zoom,
+          panY: rect.height / 2 - py * zoom,
+        });
+      };
+      setTimeout(apply, 60);
+    };
+    window.addEventListener('message', onFocus);
+    return () => window.removeEventListener('message', onFocus);
+  }, [activeSketchpadId, loadAllFrameModules]);
+
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.data?.type !== 'PV_SKETCHPAD_TAB_OPENED') return;
@@ -460,15 +516,19 @@ export function SketchpadApp() {
   // Sketchpad CRUD
   const handleCreateSketchpad = useCallback(async (name: string) => {
     await runLockedMutation(async () => {
-      const sp = await api.createSketchpad(name);
-      const frame = await api.createFrame(sp.id, 'Frame 1', 1440, 900, 0, 0);
-      const spWithFrame = { ...sp, frames: [frame] };
-      setSketchpads((prev) => [...prev, spWithFrame]);
+      // Single call creates the sketchpad + its first frame as one undoable step.
+      const sp = await api.createSketchpad(name, {
+        withFrame: { name: 'Frame 1', width: 1440, height: 900, canvasX: 0, canvasY: 0 },
+      });
+      const frame = sp.frames[0];
+      setSketchpads((prev) => [...prev, sp]);
       setActiveSketchpadId(sp.id);
-      await loadFrameModule(sp.id, frame.id);
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setTransform(centeredTransformForFrames([frame], rect.width, rect.height));
+      if (frame) {
+        await loadFrameModule(sp.id, frame.id);
+        if (containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          setTransform(centeredTransformForFrames([frame], rect.width, rect.height));
+        }
       }
     });
   }, [runLockedMutation, loadFrameModule]);
@@ -479,8 +539,9 @@ export function SketchpadApp() {
         await api.deleteSketchpad(id);
         const remaining = sketchpads.filter((s) => s.id !== id);
         if (remaining.length === 0) {
-          // Auto-create a default sketchpad so the canvas is never empty
-          const sp = await api.createSketchpad('Sketchpad 1');
+          // Auto-create a default sketchpad so the canvas is never empty.
+          // Part of the delete recovery — not a separate undoable step.
+          const sp = await api.createSketchpad('Sketchpad 1', { skipSnapshot: true });
           setSketchpads([sp]);
           setActiveSketchpadId(sp.id);
         } else {
@@ -940,7 +1001,7 @@ export function SketchpadApp() {
       const targetFile = `src/sketchpads/${activeSketchpadId}/${targetFrame}.tsx`;
 
       await runLockedMutation(async () => {
-        await takeSnapshot(targetFile, '');
+        await takeSnapshot(targetFile, '', undefined, `add ${comp.name}`);
         const result = await addBlock({
           file: targetFile,
           zoneId: 'target-zone-placeholder',
@@ -988,7 +1049,7 @@ export function SketchpadApp() {
       const targetFile = `src/sketchpads/${activeSketchpadId}/${frameId}.tsx`;
 
       await runLockedMutation(async () => {
-        await takeSnapshot(targetFile, '');
+        await takeSnapshot(targetFile, '', undefined, 'add text');
         const result = await addBlock({
           file: targetFile,
           zoneId: 'target-zone-placeholder',
@@ -1011,7 +1072,7 @@ export function SketchpadApp() {
   // Reload registry state after undo/redo (frames are hot-reloaded by HMR)
   const reloadRegistry = useCallback(async () => {
     const reg = await api.fetchRegistry();
-    
+
     if (activeSketchpadId && activeSketchpad) {
       const nextSp = reg.sketchpads.find(s => s.id === activeSketchpadId);
       if (nextSp) {
@@ -1024,9 +1085,31 @@ export function SketchpadApp() {
         }
       }
     }
-    
+
     setSketchpads(reg.sketchpads);
-  }, [activeSketchpadId, activeSketchpad, loadFrameModule]);
+
+    // If undo/redo removed the active sketchpad, re-point to a valid one AND move
+    // the viewport to it — otherwise the canvas stays panned to where the deleted
+    // sketchpad was and shows an empty page.
+    if (activeSketchpadId && !reg.sketchpads.some((s) => s.id === activeSketchpadId)) {
+      const next =
+        reg.sketchpads.find((s) => s.id === reg.lastActiveSketchpadId) ?? reg.sketchpads[0];
+      setActiveSketchpadId(next?.id ?? '');
+      setSelectedFrameIds([]);
+      if (next) {
+        const rect = containerRef.current?.getBoundingClientRect();
+        const baseTransform = next.viewState ?? INITIAL_TRANSFORM;
+        const safeTransform =
+          rect && rect.width > 0 && rect.height > 0
+            ? ensureFramesVisible(next.frames, baseTransform, rect.width, rect.height)
+            : baseTransform;
+        setTransform(safeTransform);
+        initialTransformAppliedRef.current = true;
+        hasInitiallyCentered.current = true;
+        loadAllFrameModules(next.id, next.frames);
+      }
+    }
+  }, [activeSketchpadId, activeSketchpad, loadFrameModule, loadAllFrameModules]);
 
   // One-shot flag: set when the user clicks a frame's title bar so we both keep the
   // frame selected AND focus the frame root in the inspector. The bridge → parent
@@ -1057,10 +1140,15 @@ export function SketchpadApp() {
         else if (code === 'Equal' || code === 'NumpadAdd') zoomByFactor(1.2);
         else if (code === 'Minus' || code === 'NumpadSubtract') zoomByFactor(1 / 1.2);
       }
+      // Title-bar selection moves focus into the parent shell, so the iframe's
+      // own Delete keydown never fires. The parent forwards the intent here.
+      if (e.data?.type === 'PV_FRAME_DELETE_REQUEST' && selectedFrameIds.length > 0) {
+        handleDeleteFramesMulti(selectedFrameIds);
+      }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [reloadRegistry, zoomToCenter, zoomByFactor]);
+  }, [reloadRegistry, zoomToCenter, zoomByFactor, selectedFrameIds, handleDeleteFramesMulti]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1119,10 +1207,14 @@ export function SketchpadApp() {
     return () => window.removeEventListener('keydown', handler);
   }, [selectedFrameIds, handleDeleteFramesMulti, pendingAction, zoomToCenter, zoomByFactor, handleCopyFrames, handleCutFrames, handlePasteFrames]);
 
-  // Marquee selection: starts on canvas background or empty area inside a frame.
+  // Marquee selection: starts on canvas background or empty area inside a frame,
+  // or from any point when Cmd/Ctrl is held (the bridge defers its deep-click so
+  // we can take over once the drag threshold is passed).
   // Containment-only: an element/frame must be fully enclosed.
   // If any frame is fully contained, only frames are selected (no mixed selection).
-  // Otherwise, selects top-level pv-blocks within the frame the marquee started in.
+  // Otherwise, selects the top-most fully-contained pv-blocks within the frame the
+  // marquee started in — nested blocks count individually, but collapse into an
+  // ancestor block when that ancestor is itself fully contained.
   useEffect(() => {
     const MOVE_THRESHOLD = 3;
     let dragging = false;
@@ -1150,13 +1242,23 @@ export function SketchpadApp() {
         };
       }
       if (!startFrame) return { mode: 'none', els: [] };
-      const allBlocks = Array.from(startFrame.querySelectorAll('[data-pv-block]')) as HTMLElement[];
-      const topLevel = allBlocks.filter((el) => !el.parentElement?.closest('[data-pv-block]'));
-      const contained = topLevel.filter((el) => isInside(rect, el.getBoundingClientRect()));
+      const allBlocks = (Array.from(startFrame.querySelectorAll('[data-pv-block]')) as HTMLElement[])
+        .filter((el) => el.getAttribute('data-pv-block'));
+      const containedSet = new Set(allBlocks.filter((el) => isInside(rect, el.getBoundingClientRect())));
+      // Top-most contained blocks win: a nested block is selectable on its own,
+      // but collapses into an ancestor block that is itself fully contained.
+      const topmost = Array.from(containedSet).filter((el) => {
+        let ancestor = el.parentElement?.closest('[data-pv-block]') as HTMLElement | null;
+        while (ancestor) {
+          if (containedSet.has(ancestor)) return false;
+          ancestor = ancestor.parentElement?.closest('[data-pv-block]') as HTMLElement | null;
+        }
+        return true;
+      });
       return {
         mode: 'blocks',
-        blockIds: contained.map((el) => el.getAttribute('data-pv-block')!).filter(Boolean),
-        els: contained,
+        blockIds: topmost.map((el) => el.getAttribute('data-pv-block')!),
+        els: topmost,
       };
     };
 
@@ -1165,13 +1267,20 @@ export function SketchpadApp() {
       if (spaceHeldRef.current) return;
       const t = e.target as HTMLElement | null;
       if (!t) return;
-      if (t.closest('[data-pv-block], [data-pv-sketchpad-el]')) return;
+      // Cmd/Ctrl held: a marquee may start from any point, including on top of
+      // elements and the focused-frame drag overlay — both yield when the
+      // modifier is down (the overlay bails out of its own drag and the bridge
+      // defers its deep-click to pointerup).
+      const forceMarquee = e.metaKey || e.ctrlKey;
+      if (!forceMarquee) {
+        if (t.closest('[data-pv-block], [data-pv-sketchpad-el]')) return;
+        // The focused-frame drag overlay handles its own pointer flow. Without
+        // this guard the window-level marquee handler also engages on the same
+        // pointerdown and runs querySelectorAll + setMarqueePreview on every
+        // move, which manifests as severe lag while dragging the frame.
+        if (t.closest('[data-sketchpad-frame-overlay]')) return;
+      }
       if (t.closest('[data-sketchpad-resize-handle]')) return;
-      // The focused-frame drag overlay handles its own pointer flow. Without
-      // this guard the window-level marquee handler also engages on the same
-      // pointerdown and runs querySelectorAll + setMarqueePreview on every
-      // move, which manifests as severe lag while dragging the frame.
-      if (t.closest('[data-sketchpad-frame-overlay]')) return;
       const frameRoot = t.closest('[data-sketchpad-frame-root]');
       const frameContent = t.closest('[data-sketchpad-frame]') as HTMLElement | null;
       if (frameRoot && !frameContent) return;
@@ -1281,10 +1390,22 @@ export function SketchpadApp() {
 
       if (!sketchpadId || !sourceFrameId || !targetFrameId || !draggedBlockIds?.length) return;
 
+      // The bridge keeps the drag transform applied after a move-drop so the
+      // element doesn't flash back to its origin while waiting for HMR. On any
+      // path where no reload will arrive for a block, tell it to snap back.
+      const revertRetainedDrop = (blockIds: string[]) => {
+        if (!blockIds.length) return;
+        window.dispatchEvent(new CustomEvent('pv-sketchpad-drop-reverted', { detail: { blockIds } }));
+      };
+
       // When the drop target turns out to be invalid (no source locator or no
       // editable zone), we keep the elements in their source frame and just
       // update their absolute position so the user's drag isn't discarded.
       const applyFallbackPositions = async () => {
+        // Flow elements have no fallback position — no file write is coming
+        // for them, so release their retained drag transform immediately.
+        const coveredIds = new Set((fallbackPositions ?? []).map((p) => p.blockId));
+        revertRetainedDrop(draggedBlockIds.filter((id) => !coveredIds.has(id)));
         if (!fallbackPositions?.length) return;
         await Promise.all(
           fallbackPositions.map((p) =>
@@ -1297,7 +1418,9 @@ export function SketchpadApp() {
       const fallbackTargetFile = `src/sketchpads/${sketchpadId}/${targetFrameId}.tsx`;
 
       try {
+        let mutationRan = false;
         await runLockedMutation(async () => {
+            mutationRan = true;
             // 1. Copy the elements first
             await blockAction('copy', draggedBlockIds, sourceFile);
 
@@ -1333,7 +1456,7 @@ export function SketchpadApp() {
             }
 
             const extraFiles = sourceFile !== currentTargetFile ? [currentTargetFile] : [];
-            await takeSnapshot(sourceFile, activeSourceId || '', extraFiles);
+            await takeSnapshot(sourceFile, activeSourceId || '', extraFiles, isDuplicate ? 'duplicate element' : 'move element');
 
             // 3. Paste
             const res = await addBlock({
@@ -1356,8 +1479,12 @@ export function SketchpadApp() {
             const focusIds: string[] = res?.newBlockIds?.length ? res.newBlockIds : (res?.blockId ? [res.blockId] : []);
             if (focusIds.length > 0) await focusNewBlock(focusIds);
         });
+        // Another mutation held the lock, so the drop was silently skipped —
+        // no file writes happened and no reload is coming.
+        if (!mutationRan) revertRetainedDrop(draggedBlockIds);
       } catch (err) {
         console.error('[Sketchpad] Drop sequence failed:', err);
+        revertRetainedDrop(draggedBlockIds);
       }
     };
 

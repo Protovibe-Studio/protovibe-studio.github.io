@@ -527,6 +527,20 @@ function handleParentMessage(e: MessageEvent) {
     case 'PV_CLEAR_SELECTION':
       clearSelectionOutline();
       break;
+    case 'PV_TREE_HOVER': {
+      // Hover highlight driven by the shell's elements tree panel. Reuses the
+      // same hover overlay as canvas mousemove — the pointer is over the panel
+      // while these arrive, so the two sources never fight.
+      const { runtimeId } = e.data;
+      if (!runtimeId) {
+        clearHoverOutline();
+        break;
+      }
+      const el = document.querySelector(`[data-pv-runtime-id="${runtimeId}"]`) as HTMLElement | null;
+      if (el) setHoverOutline(el);
+      else clearHoverOutline();
+      break;
+    }
     case 'PV_SET_INSPECTOR_ACTIVE': {
       const active = !!e.data.active;
       isInspectorActive = active;
@@ -545,10 +559,44 @@ function handleParentMessage(e: MessageEvent) {
     case 'PV_SET_THEME':
       document.documentElement.dataset.theme = e.data.theme;
       break;
+    case 'PV_CLEAR_STORAGE': {
+      // The app iframe is same-origin with the shell, so they share one
+      // localStorage. Drop only what the app wrote — `pv-` keys are the shell's
+      // own state (theme, comment identity, panel prefs) and must survive.
+      try {
+        Object.keys(localStorage)
+          .filter(key => !key.startsWith('pv-'))
+          .forEach(key => localStorage.removeItem(key));
+      } catch {
+        // storage disabled — nothing to clear
+      }
+      window.location.reload();
+      break;
+    }
   }
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+
+// A document that loads while the server has a compile error gets no
+// vite-error-overlay (the overlay only accompanies HMR-pushed errors) — the
+// entry module request just 500s and the page stays blank. Catch failing
+// same-origin script loads so a refresh mid-crash is still reported as one.
+// Registered at module scope: the entry module's error event fires before
+// DOMContentLoaded, so waiting for init() would miss it.
+// `moduleLoadError: true` tells the shell the canvas is blank (no overlay to
+// see through to), so it must render the error itself once the grace elapses.
+let sawModuleLoadError = false;
+window.addEventListener('error', (e) => {
+  const target = e.target as HTMLElement | null;
+  if (target?.tagName !== 'SCRIPT') return;
+  const src = (target as HTMLScriptElement).src || '';
+  if (!src.startsWith(window.location.origin)) return;
+  sawModuleLoadError = true;
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: 'PV_VITE_ERROR', moduleLoadError: true }, '*');
+  }
+}, true);
 
 function init() {
   // Skip entirely when the app is opened as a standalone page (not embedded in the
@@ -568,17 +616,27 @@ function init() {
   // covers nested scroll containers as well as the root document.
   window.addEventListener('scroll', () => syncOverlays(), { capture: true, passive: true });
 
-  // Check initial state in case the error is already there
-  if (document.querySelector('vite-error-overlay')) {
-    window.parent.postMessage({ type: 'PV_VITE_ERROR' }, '*');
-  }
+  // Report the initial error state either way. A document that unloads mid-error
+  // (full reload, manual refresh) can never post ERROR_CLEARED for the overlay it
+  // took with it, so a fresh healthy load must explicitly clear the shell's state.
+  // Note for the shell: no CLEARED is definitive — vite removes and re-adds the
+  // overlay on every update cycle when a broken JS update rides along with a
+  // successful CSS one — so recovery must always be confirmed with a delay.
+  const hasOverlay = !!document.querySelector('vite-error-overlay');
+  const hasError = sawModuleLoadError || hasOverlay;
+  window.parent.postMessage(
+    hasError
+      ? { type: 'PV_VITE_ERROR', moduleLoadError: sawModuleLoadError && !hasOverlay }
+      : { type: 'PV_VITE_ERROR_CLEARED' },
+    '*'
+  );
 
   // Observe DOM for added/removed error overlays
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       for (const node of mutation.addedNodes) {
         if (node.nodeName && (node as HTMLElement).nodeName.toLowerCase() === 'vite-error-overlay') {
-          window.parent.postMessage({ type: 'PV_VITE_ERROR' }, '*');
+          window.parent.postMessage({ type: 'PV_VITE_ERROR', moduleLoadError: false }, '*');
         }
       }
       for (const node of mutation.removedNodes) {
