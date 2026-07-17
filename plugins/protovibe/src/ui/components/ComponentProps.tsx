@@ -61,7 +61,7 @@ export const ComponentProps: React.FC = () => {
     if (removeWhenEmpty && String(propValue) === '') {
       if (isMissing) return;
       await runLockedMutation(async () => {
-        await takeSnapshot(activeData.file, activeSourceId!);
+        await takeSnapshot(activeData.file, activeSourceId!, undefined, `remove ${propName}`);
         await updateProp({
           file: activeData.file,
           action: 'remove',
@@ -73,7 +73,7 @@ export const ComponentProps: React.FC = () => {
     }
 
     await runLockedMutation(async () => {
-      await takeSnapshot(activeData.file, activeSourceId!);
+      await takeSnapshot(activeData.file, activeSourceId!, undefined, `${propName}=${String(propValue)}`);
 
       await updateProp({
         file: activeData.file,
@@ -89,7 +89,7 @@ export const ComponentProps: React.FC = () => {
   const handleRemoveProp = async (propName: string, loc: any) => {
     if (!activeData.file) return;
     await runLockedMutation(async () => {
-      await takeSnapshot(activeData.file, activeSourceId!);
+      await takeSnapshot(activeData.file, activeSourceId!, undefined, `remove ${propName}`);
       await updateProp({
         file: activeData.file,
         action: 'remove',
@@ -102,7 +102,7 @@ export const ComponentProps: React.FC = () => {
   const handleAddProp = async () => {
     if (!newPropKey.trim() || !activeData.file) return;
     await runLockedMutation(async () => {
-      await takeSnapshot(activeData.file, activeSourceId!);
+      await takeSnapshot(activeData.file, activeSourceId!, undefined, `${newPropKey.trim()}=${newPropValue.trim()}`);
       await updateProp({
         file: activeData.file,
         action: 'add',
@@ -121,7 +121,7 @@ export const ComponentProps: React.FC = () => {
       <div style={{ padding: '12px 20px', fontSize: '11px', fontWeight: '600', color: theme.text_default, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>Component properties</span>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {showAdvancedProps && <button onClick={() => setShowAddForm(!showAddForm)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '3px', background: 'transparent', border: 'none', color: theme.text_tertiary, cursor: 'pointer', padding: 0, fontSize: '16px', lineHeight: 1 }} title="Add Prop">+</button>}
+          {showAdvancedProps && <button onClick={() => setShowAddForm(!showAddForm)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '3px', background: 'transparent', border: 'none', color: theme.text_tertiary, cursor: 'pointer', padding: 0, fontSize: '16px', lineHeight: 1 }} data-tooltip="Add Prop">+</button>}
           <div ref={menuRef} style={{ position: 'relative' }}>
             <button onClick={() => setShowMenu(!showMenu)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '3px', background: 'transparent', border: 'none', color: theme.text_tertiary, cursor: 'pointer', padding: 0 }}><MoreHorizontal size={13} /></button>
             {showMenu && (

@@ -47,6 +47,7 @@ export const SCALES = {
     { val: '2xl', desc: '24px' }, { val: '3xl', desc: '28px' }, { val: 'full', desc: '9999px' }
   ],
   borderWidth: [{ val: '0', desc: '0px' }, { val: 'DEFAULT', desc: '1px' }, { val: '2', desc: '2px' }, { val: '4', desc: '4px' }, { val: '8', desc: '8px' }],
+  ringWidth: [{ val: '0', desc: '0px' }, { val: 'DEFAULT', desc: '1px' }, { val: '2', desc: '2px' }, { val: '4', desc: '4px' }, { val: '8', desc: '8px' }],
   shadow: [{ val: '2xs', desc: '2X Small' }, { val: 'xs', desc: 'Extra Small' }, { val: 'sm', desc: 'Small' }, { val: 'md', desc: 'Medium' }, { val: 'lg', desc: 'Large' }, { val: 'xl', desc: 'Extra Large' }, { val: '2xl', desc: '2XL' }, { val: 'none', desc: 'None' }],
   opacity: [{ val: '0', desc: '0%' }, { val: '10', desc: '10%' }, { val: '25', desc: '25%' }, { val: '50', desc: '50%' }, { val: '75', desc: '75%' }, { val: '90', desc: '90%' }, { val: '100', desc: '100%' }],
   zIndex: [{ val: '0', desc: '' }, { val: '10', desc: '' }, { val: '20', desc: '' }, { val: '30', desc: '' }, { val: '40', desc: '' }, { val: '50', desc: '' }, { val: 'auto', desc: '' }],
@@ -179,11 +180,14 @@ export function buildScalesFromTokens(tokens: ThemeToken[], htmlFontSize = 16): 
     '2xs': '2X Small', 'xs': 'Extra Small', 'sm': 'Small', 'DEFAULT': 'Normal',
     'md': 'Medium', 'lg': 'Large', 'xl': 'Extra Large', '2xl': '2XL', '3xl': '3XL',
   };
+  const knownShadowVals = shadowOrder.filter(val => shadowMap[val]);
+  const customShadowVals = Object.keys(shadowMap)
+    .filter(val => !shadowOrder.includes(val))
+    .sort();
   const shadow = shadowTokens.length > 0
     ? [
-        ...shadowOrder
-          .filter(val => shadowMap[val])
-          .map(val => ({ val, desc: shadowLabels[val] ?? val })),
+        ...knownShadowVals.map(val => ({ val, desc: shadowLabels[val] ?? val })),
+        ...customShadowVals.map(val => ({ val, desc: val })),
         { val: 'none', desc: 'None' },
       ]
     : SCALES.shadow;

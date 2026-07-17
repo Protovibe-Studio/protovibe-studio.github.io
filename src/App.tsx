@@ -1430,14 +1430,8 @@ function FAQ(props: any) {
 export function InstallModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState("auto");
   const [platform, setPlatform] = useState<"mac" | "windows" | null>(null);
-  const [copied, setCopied] = useState(false);
-  const installCommand = "curl -fsSL https://raw.githubusercontent.com/Protovibe-Studio/protovibe-studio/main/init-installation-via-curl.sh | bash";
   const windowsZipUrl = "https://github.com/Protovibe-Studio/protovibe-studio/archive/refs/heads/main.zip";
-  const onCopy = () => {
-    navigator.clipboard.writeText(installCommand);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
-  };
+  const macDmgUrl = "https://github.com/Protovibe-Studio/protovibe-studio/releases/latest/download/Protovibe-arm64.dmg";
   const handleClose = () => {
     setPlatform(null);
     setTab("auto");
@@ -1463,7 +1457,7 @@ export function InstallModal({ open, onClose }: { open: boolean; onClose: () => 
       <div data-pv-block="b00231" className="fixed inset-0 z-[100] bg-background-overlay flex items-start justify-center p-[12px] pt-[32px] sm:p-[24px] sm:pt-[64px] animate-[fade-in_0.2s_ease] overflow-y-auto overflow-scroll" onClick={handleClose}>
         {/* pv-editable-zone-start:z00080 */}
           {/* pv-block-start:b00232 */}
-          <div data-pv-block="b00232" className="relative w-full rounded-[16px] p-[20px] sm:p-[36px_36px_32px] animate-[modal-in_0.25s_cubic-bezier(.2,.8,.3,1)] overflow-y-auto border-0 border-border-default shadow-2xl overflow-hidden max-w-[640px] bg-background-elevated" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+          <div data-pv-block="b00232" className="relative w-full rounded-[16px] p-[20px] sm:p-[36px_36px_32px] animate-[modal-in_0.25s_cubic-bezier(.2,.8,.3,1)] overflow-y-auto border-0 border-border-default shadow-2xl overflow-hidden bg-background-elevated max-w-[540px]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
             {/* pv-editable-zone-start:z00081 */}
               {/* pv-block-start:b00233 */}
               <div data-pv-block="b00233" className="absolute top-[-40%] left-[-10%] right-[-10%] h-[60%] pointer-events-none blur-[80px] z-0 rounded-[16px] opacity-10" style={{ background: 'radial-gradient(circle at 30% 50%, #3d7bff, transparent 60%), radial-gradient(circle at 70% 50%, oklch(0.70 0.26 320), transparent 60%)' }} />
@@ -1477,7 +1471,7 @@ export function InstallModal({ open, onClose }: { open: boolean; onClose: () => 
                 {/* pv-editable-zone-start:z00082 */}
                   {/* pv-block-start:b00237 */}
                   <h3 data-pv-block="b00237" className="font-secondary font-bold text-[32px] leading-[1.1] tracking-[-0.03em] text-foreground-strong mt-12px mb-6">
-                    Install Protovibe
+                    Download Protovibe
                   </h3>
                   {/* pv-block-end:b00237 */}
                   {/* pv-block-start:plsub1 */}
@@ -1537,7 +1531,7 @@ export function InstallModal({ open, onClose }: { open: boolean; onClose: () => 
               {/* pv-block-end:plpick */}
 
               {/* pv-block-start:b00239 */}
-              {platform && (
+              {platform === "windows" && (
               <div data-pv-block="b00239" className="grid grid-cols-1 sm:grid-cols-2 gap-[10px] mb-[20px] relative z-[1]" role="tablist">
                 {/* pv-editable-zone-start:z00083 */}
                   {/* pv-block-start:b00240 */}
@@ -1600,78 +1594,43 @@ export function InstallModal({ open, onClose }: { open: boolean; onClose: () => 
 
               {/* pv-block-start:b00250 */}
               {platform && (
-              <div data-pv-block="b00250" className="relative z-[1]">
+              <div data-pv-block="b00250" className="relative z-[1] pt-6">
                 {/* pv-editable-zone-start:z00088 */}
                   {/* pv-block-start:b00251 */}
-                  {tab === "auto" && platform === "mac" && (
+                  {platform === "mac" && (
                     <>
                       {/* pv-block-start:b00252 */}
-                      <div data-pv-block="b00252" className="font-semibold text-[12.5px] mb-[10px] flex items-center gap-[8px] text-foreground-default">
+                      <div data-pv-block="b00252" className="text-[12.5px] mb-[10px] flex gap-[8px] text-foreground-default flex-col items-start font-medium">
                         {/* pv-editable-zone-start:zstp01 */}
-                          {/* pv-block-start:nbas01 */}
-                          <span data-pv-block="nbas01" className="inline-flex items-center justify-center rounded-full font-bold leading-none shrink-0 bg-background-tertiary text-foreground-secondary text-xs p-2 h-6">
-                            Step 1
-                          </span>
-                          {/* pv-block-end:nbas01 */}
                           {/* pv-block-start:stxt01 */}
-                          <span data-pv-block="stxt01">Run this in your terminal:</span>
+                          <span data-pv-block="stxt01">
+                            Download the app (170MB)
+                          </span>
                           {/* pv-block-end:stxt01 */}
                         {/* pv-editable-zone-end:zstp01 */}
                       </div>
                       {/* pv-block-end:b00252 */}
-                      {/* pv-block-start:b00253 */}
-                      <div data-pv-block="b00253" className="bg-background-sunken border-border-secondary rounded-[10px] font-mono text-[13px] text-foreground-strong leading-[1.55] overflow-auto flex items-center gap-[10px] p-3">
-                        {/* pv-editable-zone-start:z00089 */}
-                          {/* pv-block-start:9ioxu8 */}
-                          <Icon data-pv-block="9ioxu8" iconSymbol="mdi:dollar" size="sm" className="shrink-0 text-foreground-primary mt-[1px]" />
-                          {/* pv-block-end:9ioxu8 */}
-                          {/* pv-block-start:b00255 */}
-                          <code data-pv-block="b00255">{installCommand}</code>
-                          {/* pv-block-end:b00255 */}
-                        {/* pv-editable-zone-end:z00089 */}
-                      </div>
-                      {/* pv-block-end:b00253 */}
-
-                      {/* pv-block-start:auto12 */}
-                      <div data-pv-block="auto12" className="flex gap-[10px] items-start p-[12px_14px] rounded-[10px] border-0 border-border-default bg-background-secondary mt-2">
-                        {/* pv-editable-zone-start:zauto5 */}
-                          {/* pv-block-start:autoic */}
-                          <Icon data-pv-block="autoic" iconSymbol="mdi:lightbulb-on-outline" size="sm" className="shrink-0 text-foreground-primary mt-[1px]" />
-                          {/* pv-block-end:autoic */}
-                          {/* pv-block-start:autotx */}
-                          <span data-pv-block="autotx" className="text-[13px] text-foreground-secondary leading-[1.55]">
-                            Don't want to use a terminal yourself? Paste the command into your coding agent (Claude Code, Cursor, Copilot, Gemini CLI) and ask it to run the script. It'll do exactly the same thing.
+                      {/* pv-block-start:macdmg */}
+                      <a data-pv-block="macdmg" href={macDmgUrl} target="_blank" rel="noreferrer" className="appearance-none border-0 bg-background-primary text-white font-inherit no-underline font-semibold text-[14px] p-[10px_18px] rounded-[9px] inline-flex items-center gap-[8px] cursor-pointer transition-transform duration-150 hover:-translate-y-[1px] shadow-[0_8px_28px_-10px_rgba(61,123,255,0.6)] w-full justify-center">
+                        {/* pv-editable-zone-start:zmacdl */}
+                          {/* pv-block-start:macdli */}
+                          <Icon data-pv-block="macdli" iconSymbol="mdi:download" size="sm" />
+                          {/* pv-block-end:macdli */}
+                          {/* pv-block-start:macdll */}
+                          <span data-pv-block="macdll">
+                            Download Protovibe for Mac
                           </span>
-                          {/* pv-block-end:autotx */}
-                        {/* pv-editable-zone-end:zauto5 */}
-                      </div>
-                      {/* pv-block-end:auto12 */}
-
-                      {/* pv-block-start:cpybtn */}
-                      <button
-                        data-pv-block="cpybtn"
-                        onClick={onCopy}
-                        className="mt-[12px] appearance-none border-0 bg-background-primary text-white font-inherit font-semibold text-[14px] p-[10px_18px] rounded-[9px] inline-flex items-center gap-[8px] cursor-pointer transition-transform duration-150 hover:-translate-y-[1px] shadow-[0_8px_28px_-10px_rgba(61,123,255,0.6)]">
-                        {/* pv-editable-zone-start:zcpy01 */}
-                          {/* pv-block-start:cpyico */}
-                          <Icon data-pv-block="cpyico" iconSymbol={copied ? "mdi:check" : "mdi:content-copy"} size="sm" />
-                          {/* pv-block-end:cpyico */}
-                          {/* pv-block-start:cpylbl */}
-                          <span data-pv-block="cpylbl">{copied ? "Copied!" : "Copy command"}</span>
-                          {/* pv-block-end:cpylbl */}
-                        {/* pv-editable-zone-end:zcpy01 */}
-                      </button>
-                      {/* pv-block-end:cpybtn */}
+                          {/* pv-block-end:macdll */}
+                        {/* pv-editable-zone-end:zmacdl */}
+                      </a>
+                      {/* pv-block-end:macdmg */}
                       {/* pv-block-start:wfo39x */}
-                      <div data-pv-block="wfo39x" className="font-semibold text-[12.5px] mt-6 mb-2 flex items-center gap-[8px] text-foreground-default">
+                      <div data-pv-block="wfo39x" className="text-[12.5px] flex gap-[8px] text-foreground-default mt-8 mb-2 flex-col items-start font-medium">
                         {/* pv-editable-zone-start:zstp02 */}
-                          {/* pv-block-start:kqfogw */}
-                          <span data-pv-block="kqfogw" className="inline-flex items-center justify-center rounded-full font-bold leading-none shrink-0 bg-background-tertiary text-foreground-secondary text-xs p-2 h-6">
-                            Step 2
-                          </span>
-                          {/* pv-block-end:kqfogw */}
                           {/* pv-block-start:stxt02 */}
-                          <span data-pv-block="stxt02">Drag Protovibe.app into Applications folder</span>
+                          <span data-pv-block="stxt02">
+                            Open the downloaded DMG file and drag Protovibe.app into your Applications folder
+                          </span>
                           {/* pv-block-end:stxt02 */}
                         {/* pv-editable-zone-end:zstp02 */}
                       </div>
@@ -1748,7 +1707,7 @@ export function InstallModal({ open, onClose }: { open: boolean; onClose: () => 
                   {/* pv-block-end:winauto */}
 
                   {/* pv-block-start:b00260 */}
-                  {tab === "manual" && (
+                  {tab === "manual" && platform === "windows" && (
                     <>
                       {/* pv-block-start:man01 */}
                       <div data-pv-block="man01" className="font-semibold text-[12.5px] text-foreground-secondary mb-[10px]">
@@ -1796,6 +1755,7 @@ export function InstallModal({ open, onClose }: { open: boolean; onClose: () => 
                   {/* pv-block-end:b00260 */}
 
                   {/* pv-block-start:faq01 */}
+                  {platform === "windows" && (
                   <div data-pv-block="faq01" className="mt-[28px] pt-[12px] border-border-secondary flex flex-col border-t-0">
                     {/* pv-editable-zone-start:zfaq1 */}
                       {/* pv-block-start:faqs0 */}
@@ -1919,6 +1879,7 @@ export function InstallModal({ open, onClose }: { open: boolean; onClose: () => 
                       {/* pv-block-end:faq06 */}
                     {/* pv-editable-zone-end:zfaq1 */}
                   </div>
+                  )}
                   {/* pv-block-end:faq01 */}
                 {/* pv-editable-zone-end:z00088 */}
               </div>

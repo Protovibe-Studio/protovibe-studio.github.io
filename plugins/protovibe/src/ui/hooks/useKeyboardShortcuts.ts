@@ -1,16 +1,19 @@
 import { useEffect } from 'react';
 import { useProtovibe } from '../context/ProtovibeContext';
-import { undo, redo, takeSnapshot, addBlock, deleteBlocks, uploadImage } from '../api/client';
+import { undo, redo, takeSnapshot, addBlock, deleteBlocks, unwrapBlock, uploadImage } from '../api/client';
+import { collectChildPositions } from '../utils/unwrapGeometry';
 import {
   executeBlockAction,
   executeClipboardBlockAction,
   type BlockMutationAction,
   type ClipboardBlockAction
 } from '../utils/executeBlockAction';
-import { emitToast } from '../events/toast';
+import { emitToast, formatUndoRedoMessage } from '../events/toast';
+import { openNotEditableDialog } from '../components/NotEditableDialog';
 import {
   getAllowedParent,
   getAllowedChild,
+  getAllowedChildren,
   getAllowedSibling,
 } from '../utils/traversal';
 import { isTypingInput } from '../utils/elementType';
@@ -33,8 +36,6 @@ export function useKeyboardShortcuts() {
 
   useEffect(() => {
     if (!inspectorOpen) return;
-
-    let pasteShiftRef = false;
 
     const focusRestoredElement = (sourceId: string | undefined): Promise<void> => {
       return new Promise((resolve) => {
@@ -116,7 +117,9 @@ export function useKeyboardShortcuts() {
             Array.from(document.querySelectorAll('iframe')).forEach((iframe) => {
               iframe.contentWindow?.postMessage({ type: 'PV_UNDO_REDO_COMPLETE' }, '*');
             });
-            emitToast({ message: isRedo ? 'Redone' : 'Undone', variant: 'info', durationMs: 800 });
+            // Refresh the comments panel so undone/redone threads & replies sync.
+            window.dispatchEvent(new CustomEvent('pv-comments-refresh'));
+            emitToast({ message: formatUndoRedoMessage(isRedo ? 'Redo' : 'Undo', res), variant: 'info', durationMs: 1600 });
           } else {
             emitToast({ message: isRedo ? 'Nothing to redo' : 'Nothing to undo', variant: 'error', durationMs: 800 });
           }
@@ -137,7 +140,9 @@ export function useKeyboardShortcuts() {
             Array.from(document.querySelectorAll('iframe')).forEach((iframe) => {
               iframe.contentWindow?.postMessage({ type: 'PV_UNDO_REDO_COMPLETE' }, '*');
             });
-            emitToast({ message: 'Redone', variant: 'info', durationMs: 800 });
+            // Refresh the comments panel so undone/redone threads & replies sync.
+            window.dispatchEvent(new CustomEvent('pv-comments-refresh'));
+            emitToast({ message: formatUndoRedoMessage('Redo', res), variant: 'info', durationMs: 1600 });
           } else {
             emitToast({ message: 'Nothing to redo', variant: 'error', durationMs: 800 });
           }
@@ -148,11 +153,12 @@ export function useKeyboardShortcuts() {
 
       if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
         e.preventDefault();
+        // The FloatingToolbar handlers fall back to the "not editable" dialog
+        // when the selected element can't take the action.
         if (e.shiftKey) {
           window.dispatchEvent(new CustomEvent('pv:open-add-after-dialog'));
         } else {
-          const canAdd = !!(activeData?.file && zones.length > 0);
-          if (canAdd) window.dispatchEvent(new CustomEvent('pv:open-add-dialog'));
+          window.dispatchEvent(new CustomEvent('pv:open-add-dialog'));
         }
         return;
       }
@@ -162,9 +168,19 @@ export function useKeyboardShortcuts() {
       // Copy, Cut, Paste, Duplicate
       const key = e.key.toLowerCase();
       if ((e.metaKey || e.ctrlKey) && key === 'v') {
-        // Defer to the `paste` event so we can route image clipboard data
-        // to the image-insert flow even when a protovibe block was previously copied.
-        pasteShiftRef = e.shiftKey;
+        if (e.shiftKey) {
+          // Paste after: browsers don't reliably dispatch a native `paste`
+          // event for Cmd+Shift+V when no editable element is focused, so we
+          // can't defer to `handlePaste` for this one. The copied block lives
+          // in a server-side clipboard, so no browser clipboard data is needed
+          // — perform the paste-after directly here.
+          e.preventDefault();
+          await pasteBlock(true);
+          return;
+        }
+        // Defer plain Cmd+V to the native `paste` event so we can route image
+        // clipboard data to the image-insert flow even when a protovibe block
+        // was previously copied.
         return;
       }
       if ((e.metaKey || e.ctrlKey) && (key === 'c' || key === 'x' || key === 'd')) {
@@ -181,7 +197,7 @@ export function useKeyboardShortcuts() {
 
         {
           if (blockIds.length === 0 || !isBlockInCurrentFile) {
-            emitToast(`Can't ${key === 'd' ? 'duplicate' : key === 'c' ? 'copy' : 'cut'} this element`);
+            openNotEditableDialog();
             return;
           }
 
@@ -240,7 +256,8 @@ export function useKeyboardShortcuts() {
             .filter(Boolean) as string[]
         )];
         if (blockIds.length === 0) {
-          emitToast({ message: "Can't wrap this element", variant: 'error' });
+          e.preventDefault();
+          openNotEditableDialog();
           return;
         }
         const isNested = targets.some(t1 => targets.some(t2 => t1 !== t2 && t1.contains(t2)));
@@ -251,7 +268,7 @@ export function useKeyboardShortcuts() {
         e.preventDefault();
         const targetLayoutMode = currentBaseTarget?.parentElement?.closest('[data-layout-mode]')?.getAttribute('data-layout-mode') || currentBaseTarget?.getAttribute('data-layout-mode') || 'flow';
         const res = await runLockedMutation(async () => {
-          await takeSnapshot(activeData.file, activeSourceId!);
+          await takeSnapshot(activeData.file, activeSourceId!, undefined, 'wrap blocks');
           const response = await fetch('/__wrap-blocks', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -261,6 +278,39 @@ export function useKeyboardShortcuts() {
           return await response.json();
         });
         if (res?.wrapperId) focusNewBlock(res.wrapperId, { maxAttempts: 20 });
+        return;
+      }
+
+      // 3.2. Unwrap Block — Shift+G or Cmd/Ctrl+Backspace
+      if ((e.shiftKey && e.key === 'G') || ((e.metaKey || e.ctrlKey) && e.key === 'Backspace')) {
+        if (!activeData?.file || !currentBaseTarget) return;
+        const closestBlock = currentBaseTarget.closest('[data-pv-block]') as HTMLElement | null;
+        const blockId = closestBlock?.getAttribute('data-pv-block');
+        const isBlockInCurrentFile = activeData?.componentProps?.some((p: any) => p.name === 'data-pv-block');
+        if (!closestBlock || !blockId || !isBlockInCurrentFile) {
+          e.preventDefault();
+          openNotEditableDialog();
+          return;
+        }
+        e.preventDefault();
+        const childPositions = collectChildPositions(closestBlock);
+        if (Object.keys(childPositions).length === 0) {
+          emitToast({ message: 'Nothing to unwrap', variant: 'error' });
+          return;
+        }
+        const targetLayoutMode = (closestBlock.parentElement?.closest('[data-layout-mode]')?.getAttribute('data-layout-mode') || 'flow') as 'flow' | 'absolute';
+        const res = await runLockedMutation(async () => {
+          await takeSnapshot(activeData.file, activeSourceId!, undefined, 'unwrap block');
+          return unwrapBlock({
+            file: activeData.file,
+            blockId,
+            targetLayoutMode,
+            childPositions: targetLayoutMode === 'absolute' ? childPositions : undefined,
+          });
+        }).catch((err: any) => {
+          emitToast({ message: err.message || 'Failed to unwrap block', variant: 'error' });
+        });
+        if (res?.blockIds?.length) focusNewBlock(res.blockIds, { maxAttempts: 20 });
         return;
       }
 
@@ -286,7 +336,7 @@ export function useKeyboardShortcuts() {
           }
           e.preventDefault();
           await runLockedMutation(async () => {
-            await takeSnapshot(activeData.file, activeSourceId!);
+            await takeSnapshot(activeData.file, activeSourceId!, undefined, `delete ${multiBlockIds.length} blocks`);
             await deleteBlocks(activeData.file, multiBlockIds);
           });
           clearFocus();
@@ -299,12 +349,32 @@ export function useKeyboardShortcuts() {
       // 4. Delete or Move Block
       if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '[' || e.key === ']') {
         const closestBlock = currentBaseTarget.closest('[data-pv-block]');
+        // If the inspector focus is on a sketchpad frame's root element (the
+        // direct child of `data-sketchpad-frame`, which usually has no
+        // `data-pv-block`), forward Delete to the sketchpad iframe. The iframe's
+        // own keydown handler can't fire here because focusElement blurs the
+        // iframe when selecting the frame root via its title bar.
+        if (e.key === 'Backspace' || e.key === 'Delete') {
+          const frameContainer = currentBaseTarget.parentElement?.hasAttribute('data-sketchpad-frame')
+            ? currentBaseTarget.parentElement
+            : closestBlock?.parentElement?.hasAttribute('data-sketchpad-frame')
+              ? closestBlock.parentElement
+              : null;
+          if (frameContainer) {
+            e.preventDefault();
+            const iframeEl = (Array.from(document.querySelectorAll('iframe')) as HTMLIFrameElement[])
+              .find(f => f.contentDocument === currentBaseTarget.ownerDocument) ?? null;
+            iframeEl?.contentWindow?.postMessage({ type: 'PV_FRAME_DELETE_REQUEST' }, '*');
+            return;
+          }
+        }
         const blockId = closestBlock?.getAttribute('data-pv-block');
         const isBlockInCurrentFile = activeData?.componentProps?.some((p: any) => p.name === 'data-pv-block');
         
         if (blockId && activeData?.file) {
           if (!isBlockInCurrentFile) {
-            emitToast({ message: `Can't modify this element here`, variant: 'error' });
+            e.preventDefault();
+            openNotEditableDialog();
             return;
           }
           e.preventDefault();
@@ -323,6 +393,10 @@ export function useKeyboardShortcuts() {
               refreshActiveData
             });
           });
+        } else if (activeData?.file) {
+          // Selected element is not a pv block — explain how to make it editable.
+          e.preventDefault();
+          openNotEditableDialog();
         }
         return;
       }
@@ -352,6 +426,25 @@ export function useKeyboardShortcuts() {
           focusElement(newTarget);
         }
       };
+
+      // WASD traversal is bare-key only. When Cmd/Ctrl is held these letters mean
+      // something else (e.g. Cmd+S opens the Git sync popover), so don't traverse.
+      if (e.metaKey || e.ctrlKey) return;
+
+      // Enter selects all immediate children (multi-select). Shift+Enter
+      // traverses up to the parent, mirroring the "W" key.
+      if (e.key === 'Enter') {
+        if (e.shiftKey) {
+          handleNavigate(getAllowedParent(currentBaseTarget));
+        } else {
+          const children = getAllowedChildren(currentBaseTarget);
+          if (children.length > 0) {
+            e.preventDefault();
+            focusElement(children);
+          }
+        }
+        return;
+      }
 
       const navKey = e.key.toLowerCase();
       if (navKey === 'w') handleNavigate(getAllowedParent(currentBaseTarget));
@@ -404,7 +497,7 @@ export function useKeyboardShortcuts() {
 
       await runLockedMutation(async () => {
         const [url, dims] = await Promise.all([uploadImage(imageFile), getImageDimensions(imageFile)]);
-        await takeSnapshot(activeData.file, activeSourceId!);
+        await takeSnapshot(activeData.file, activeSourceId!, undefined, 'insert image');
         const res = await addBlock({
           file: activeData.file,
           zoneId: wantAfter ? undefined : targetZone.id,
@@ -430,28 +523,10 @@ export function useKeyboardShortcuts() {
       });
     };
 
-    const handlePaste = async (e: ClipboardEvent) => {
-      if (isMutationLocked) return;
-      if (isTypingInput(e.target as HTMLElement)) return;
-      if (!activeData?.file) return;
-      if (!currentBaseTarget) return;
+    const pasteBlock = async (isPasteAfter: boolean) => {
+      if (!activeData?.file || !currentBaseTarget) return;
 
-      const items = e.clipboardData?.items;
-      const imageItem = items
-        ? Array.from(items).find(it => it.kind === 'file' && it.type.startsWith('image/'))
-        : null;
-      const imageFile = imageItem?.getAsFile() || null;
-
-      const isPasteAfter = pasteShiftRef;
-      pasteShiftRef = false;
-
-      if (imageFile) {
-        e.preventDefault();
-        await insertImageFile(imageFile);
-        return;
-      }
-
-      const targets = selectedTargets?.length > 0 ? selectedTargets : (currentBaseTarget ? [currentBaseTarget] : []);
+      const targets = selectedTargets?.length > 0 ? selectedTargets : [currentBaseTarget];
       const blockIds = [...new Set(
         targets
           .map(t => t.closest('[data-pv-block]')?.getAttribute('data-pv-block'))
@@ -460,29 +535,26 @@ export function useKeyboardShortcuts() {
       const isBlockInCurrentFile = activeData?.componentProps?.some((p: any) => p.name === 'data-pv-block');
       const targetZone = zones[0];
       const targetBlockId = blockIds[0];
-      const wantAfter = isPasteAfter;
 
-      if (wantAfter && (!targetBlockId || !isBlockInCurrentFile)) {
+      if (isPasteAfter && (!targetBlockId || !isBlockInCurrentFile)) {
         emitToast({ message: "Can't paste after this element", variant: 'error' });
         return;
       }
-      if (!wantAfter && !targetZone) {
+      if (!isPasteAfter && !targetZone) {
         emitToast({ message: "Can't paste inside this element", variant: 'error' });
         return;
       }
 
-      e.preventDefault();
-
-      const targetContainer = wantAfter ? currentBaseTarget?.parentElement : currentBaseTarget;
+      const targetContainer = isPasteAfter ? currentBaseTarget?.parentElement : currentBaseTarget;
       const targetLayoutMode = targetContainer?.getAttribute('data-layout-mode') || 'flow';
 
       await runLockedMutation(async () => {
-        await takeSnapshot(activeData.file, activeSourceId!);
+        await takeSnapshot(activeData.file, activeSourceId!, undefined, 'paste');
         const res = await addBlock({
           file: activeData.file,
-          zoneId: wantAfter ? undefined : targetZone.id,
-          afterBlockId: wantAfter ? targetBlockId! : undefined,
-          isPristine: wantAfter ? false : targetZone.isPristine,
+          zoneId: isPasteAfter ? undefined : targetZone.id,
+          afterBlockId: isPasteAfter ? targetBlockId! : undefined,
+          isPristine: isPasteAfter ? false : targetZone.isPristine,
           elementType: 'paste',
           targetStartLine: activeData.startLine,
           targetEndLine: activeData.endLine,
@@ -498,6 +570,30 @@ export function useKeyboardShortcuts() {
       }).catch((err: any) => {
         emitToast({ message: err.message || 'Failed to paste block', variant: 'error' });
       });
+    };
+
+    const handlePaste = async (e: ClipboardEvent) => {
+      if (isMutationLocked) return;
+      if (isTypingInput(e.target as HTMLElement)) return;
+      if (!activeData?.file) return;
+      if (!currentBaseTarget) return;
+
+      const items = e.clipboardData?.items;
+      const imageItem = items
+        ? Array.from(items).find(it => it.kind === 'file' && it.type.startsWith('image/'))
+        : null;
+      const imageFile = imageItem?.getAsFile() || null;
+
+      if (imageFile) {
+        e.preventDefault();
+        await insertImageFile(imageFile);
+        return;
+      }
+
+      // Plain Cmd+V pastes the copied block inside the selected element.
+      // Cmd+Shift+V ("paste after") is handled directly in the keydown handler.
+      e.preventDefault();
+      await pasteBlock(false);
     };
 
     const handleDragOver = (e: DragEvent) => {

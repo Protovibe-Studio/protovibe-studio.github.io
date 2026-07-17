@@ -46,6 +46,39 @@ export async function blockAction(action: string, blockId: string | string[], fi
 }
 
 
+export async function convertToSketchpad(params: {
+  file: string;
+  snapshot: unknown;
+  options: { layoutMode: 'flex' | 'absolute' | 'flat'; keepComponents: string[] };
+}): Promise<{ success: boolean; blockCount: number; imports: Array<{ name: string; path: string }>; warnings: string[] }> {
+  const res = await fetch('/__convert-to-sketchpad', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error('Failed to convert element');
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+export async function unwrapBlock(params: {
+  file: string;
+  blockId: string;
+  targetLayoutMode: 'flow' | 'absolute';
+  childPositions?: Record<string, { left: number; top: number; width: number; wasAbsolute: boolean }>;
+}) {
+  const res = await fetch('/__unwrap-block', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error('Failed to unwrap block');
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
 export async function deleteBlocks(file: string, blockIds: string[]) {
   const res = await fetch('/__delete-blocks', {
     method: 'POST',
@@ -125,11 +158,11 @@ export async function updateProp(params: {
   return await res.json();
 }
 
-export async function takeSnapshot(file: string, activeId: string, extraFiles?: string[]) {
+export async function takeSnapshot(file: string, activeId: string, extraFiles?: string[], note?: string) {
   const currentURLQueryString = window.location.search;
   const body = extraFiles?.length
-    ? { files: [file, ...extraFiles], activeId, currentURLQueryString }
-    : { file, activeId, currentURLQueryString };
+    ? { files: [file, ...extraFiles], activeId, currentURLQueryString, note }
+    : { file, activeId, currentURLQueryString, note };
   const res = await fetch('/__take-snapshot', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -238,9 +271,33 @@ export async function restartServer() {
   return await res.json();
 }
 
-export async function fetchCloudflarePublishMetadata(): Promise<{ projectName: string; url: string; deployHistory: string[] }> {
+export interface CloudflareDeployHistoryEntry {
+  url: string;
+  publishedAt?: string;
+}
+
+export interface CloudflarePublishMetadata {
+  projectName: string;
+  url: string;
+  lastPublishedAt: string;
+  deployHistory: CloudflareDeployHistoryEntry[];
+}
+
+export async function fetchCloudflarePublishMetadata(): Promise<CloudflarePublishMetadata> {
   const res = await fetch('/__cloudflare-publish-metadata');
   if (!res.ok) throw new Error('Failed to fetch Cloudflare metadata');
+  return res.json();
+}
+
+export interface CloudflareAuthStatus {
+  loggedIn: boolean;
+  email?: string;
+  accounts?: Array<{ id: string; name: string }>;
+}
+
+export async function fetchCloudflareAuthStatus(refresh = false): Promise<CloudflareAuthStatus> {
+  const res = await fetch(`/__cloudflare-auth-status${refresh ? '?refresh=1' : ''}`);
+  if (!res.ok) throw new Error('Failed to fetch Cloudflare auth status');
   return res.json();
 }
 
@@ -293,5 +350,96 @@ export interface CloudflarePublishStatus {
 export async function fetchCloudflarePublishStatus(): Promise<CloudflarePublishStatus> {
   const res = await fetch('/__cloudflare-publish-status');
   if (!res.ok) throw new Error('Failed to fetch publish status');
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Git sync
+// ---------------------------------------------------------------------------
+
+export interface GitStatus {
+  gitInstalled: boolean;
+  isRepo: boolean;
+  root: string;
+  branch: string | null;
+  hasUpstream: boolean;
+  hasOrigin: boolean;
+  dirty: boolean;
+  changedCount: number;
+  ahead: number;
+  behind: number;
+  remoteUrl: string | null;
+  remoteKind: 'github-https' | 'ssh-or-other' | null;
+}
+
+export type GitOp = 'sync' | 'commit' | 'pull' | 'push' | 'backup';
+export type GitOpStatus = 'idle' | 'committing' | 'pulling' | 'pushing' | 'success' | 'error';
+
+export interface GitOpState {
+  status: GitOpStatus;
+  message: string;
+  op?: GitOp;
+  resolvedConflict?: boolean;
+  error?: string;
+  needsInstall?: boolean;
+  installUrl?: string;
+  repoUrl?: string;
+}
+
+export interface GithubStatus {
+  connected: boolean;
+  login: string | null;
+  avatarUrl: string | null;
+  installUrl: string;
+  managerReachable?: boolean;
+  managerUrl?: string | null;
+}
+
+export interface GithubRepoAccess {
+  state: 'ok' | 'no-push' | 'not-covered' | 'not-connected' | 'no-remote' | 'not-github';
+  owner?: string;
+  repo?: string;
+  installUrl: string;
+  tokenInvalid?: boolean;
+}
+
+export async function fetchGithubStatus(probe = false): Promise<GithubStatus> {
+  const res = await fetch(`/__github-status${probe ? '?probe=1' : ''}`);
+  if (!res.ok) throw new Error('Failed to fetch GitHub status');
+  return res.json();
+}
+
+export async function fetchGithubRepoAccess(): Promise<GithubRepoAccess> {
+  const res = await fetch('/__github-repo-access');
+  if (!res.ok) throw new Error('Failed to check repository access');
+  return res.json();
+}
+
+export async function githubLogout(): Promise<void> {
+  const res = await fetch('/__github-logout', { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to log out of GitHub');
+}
+
+export async function fetchGitStatus(opts?: { fetch?: boolean }): Promise<GitStatus> {
+  const res = await fetch(`/__git-status${opts?.fetch ? '?fetch=1' : ''}`);
+  if (!res.ok) throw new Error('Failed to fetch git status');
+  return res.json();
+}
+
+export async function startGitOp(op: GitOp, message?: string): Promise<void> {
+  const res = await fetch('/__git-op-start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ op, message: message ?? null }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error((data as { error?: string }).error || `Failed to start ${op}`);
+  }
+}
+
+export async function fetchGitOpStatus(): Promise<GitOpState> {
+  const res = await fetch('/__git-op-status');
+  if (!res.ok) throw new Error('Failed to fetch git op status');
   return res.json();
 }

@@ -51,7 +51,8 @@ export const ClassesRaw: React.FC = () => {
   const handleUpdateClass = async (oldCls: string, newCls: string, action: string) => {
     if (!activeData.file || oldCls === newCls) return;
     await runLockedMutation(async () => {
-      await takeSnapshot(activeData.file, activeSourceId!);
+      const note = action === 'remove' ? `remove ${oldCls}` : newCls;
+      await takeSnapshot(activeData.file, activeSourceId!, undefined, note);
       await updateSource({ ...activeData, id: activeSourceId!, oldClass: oldCls, newClass: newCls, action });
     });
   };
@@ -113,7 +114,7 @@ export const ClassesRaw: React.FC = () => {
                               <button
                                 onClick={() => handleUpdateClass(c.cls, '', 'remove')}
                                 style={{ background: 'transparent', border: 'none', color: theme.text_tertiary, padding: '2px 2px', cursor: 'pointer', display: 'flex', alignItems: 'center', lineHeight: 1 }}
-                                title="Remove Class"
+                                data-tooltip="Remove Class"
                                 onMouseEnter={e => (e.currentTarget.style.color = theme.text_secondary)}
                                 onMouseLeave={e => (e.currentTarget.style.color = theme.text_tertiary)}
                               >&times;</button>

@@ -1,10 +1,15 @@
 import { Plugin, normalizePath } from 'vite';
+import type { HtmlTagDescriptor } from 'vite';
 import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { handleGetSourceInfo, handleUpdateSource, handleGetZones, handleAddBlock, handleWrapBlocks, handleDeleteBlocks, handleBlockAction, handleTakeSnapshot, handleUndo, handleRedo, handleUpdateProp, handleGetComponents, handleGetThemeColors, handleUpdateThemeColor, handleGetThemeTokens, handleUpdateThemeToken, handleUpdateFontFamily, handleUploadImage, handleCloudflarePublishMetadata, handleCloudflarePublishSaveName, handleCloudflarePublishStart, handleCloudflarePublishStatus, handleCloudflareLoginStart, handleCloudflareLogout } from './backend/server';
+import { handleGetSourceInfo, handleUpdateSource, handleGetZones, handleAddBlock, handleWrapBlocks, handleUnwrapBlock, handleDeleteBlocks, handleBlockAction, handleTakeSnapshot, handleUndo, handleRedo, handleUpdateProp, handleGetComponents, handleGetThemeColors, handleUpdateThemeColor, handleGetThemeTokens, handleUpdateThemeToken, handleUpdateFontFamily, handleUploadImage, handleCloudflarePublishMetadata, handleCloudflarePublishSaveName, handleCloudflarePublishStart, handleCloudflarePublishStatus, handleCloudflareLoginStart, handleCloudflareLogout, handleCloudflareAuthStatus } from './backend/server';
+import { handleConvertToSketchpad } from './backend/convert-to-sketchpad';
 import { registerSketchpadMiddleware } from './sketchpad-source';
+import { registerCommentsMiddleware } from './backend/comments-server';
+import { registerGitMiddleware } from './backend/git-server';
+import { registerProfileMiddleware } from './backend/profile-server';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +17,35 @@ const __dirname = path.dirname(__filename);
 // Absolute path to the plugin's source directory (one level above dist/)
 const PLUGIN_DIR = path.resolve(__dirname, '..');
 const PLUGIN_VERSION = JSON.parse(fs.readFileSync(path.join(PLUGIN_DIR, 'package.json'), 'utf-8')).version as string;
+
+/**
+ * Extract the webfont stylesheet URLs the user's app depends on by reading the
+ * `@import url('https://fonts.googleapis.com/...')` (and `@import url("...")`)
+ * lines from src/index.css.
+ *
+ * These same fonts are pulled in by index.css inside the sketchpad iframe, but
+ * that stylesheet is owned by Tailwind's Vite plugin and gets torn down and
+ * re-injected on every mutation's HMR update. With `display=swap` that momentary
+ * removal of the `@font-face` makes text flash the fallback font on each move.
+ * Injecting the same font stylesheets as plain <link>s in the iframe <head>
+ * keeps the @font-face continuously registered (the browser owns these links,
+ * not HMR), so the glyphs never fall back between updates.
+ */
+function getWebfontHrefs(): string[] {
+  try {
+    const cssPath = path.resolve(process.cwd(), 'src/index.css');
+    const css = fs.readFileSync(cssPath, 'utf-8');
+    const hrefs: string[] = [];
+    const importRegex = /@import\s+url\(\s*(['"]?)(https:\/\/fonts\.googleapis\.com\/[^'")]+)\1\s*\)/g;
+    let m: RegExpExecArray | null;
+    while ((m = importRegex.exec(css)) !== null) {
+      hrefs.push(m[2]);
+    }
+    return hrefs;
+  } catch {
+    return [];
+  }
+}
 
 export function protovibeSourcePlugin(): Plugin {
   return {
@@ -81,6 +115,25 @@ export function protovibeSourcePlugin(): Plugin {
           console.log('[protovibe] Plugin code changed — restarting Vite server…');
           await server.restart();
         }
+      });
+
+      // Timestamp of the last watched-source change. The shell polls this
+      // during a crash episode to keep the loading cover up while an agent is
+      // still editing (see ProtovibeApp's crash-episode machine).
+      let lastSourceChangeAt = 0;
+      server.watcher.on('change', (changedFile) => {
+        if (changedFile === inspectorPath || changedFile === bridgePath || changedFile === pluginIndexPath) return;
+        // The sketchpad registry is rewritten by the plugin itself on ordinary
+        // requests — it is not a code edit and must not prolong a crash episode.
+        if (changedFile.endsWith(path.join('sketchpads', '_registry.json'))) return;
+        lastSourceChangeAt = Date.now();
+      });
+      server.middlewares.use('/__hmr-activity', (req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(JSON.stringify({
+          msSinceLastChange: lastSourceChangeAt ? Date.now() - lastSourceChangeAt : null,
+        }));
       });
 
       const srcPath = path.resolve(process.cwd(), 'src');
@@ -155,8 +208,10 @@ export function protovibeSourcePlugin(): Plugin {
       server.middlewares.use('/__get-zones', handleGetZones);
       server.middlewares.use('/__add-block', handleAddBlock);
       server.middlewares.use('/__wrap-blocks', handleWrapBlocks);
+      server.middlewares.use('/__unwrap-block', handleUnwrapBlock);
       server.middlewares.use('/__delete-blocks', handleDeleteBlocks);
       server.middlewares.use('/__block-action', handleBlockAction);
+      server.middlewares.use('/__convert-to-sketchpad', (req, res) => handleConvertToSketchpad(req, res, server));
       server.middlewares.use('/__take-snapshot', handleTakeSnapshot);
       server.middlewares.use('/__undo', handleUndo);
       server.middlewares.use('/__redo', handleRedo);
@@ -174,6 +229,7 @@ export function protovibeSourcePlugin(): Plugin {
       server.middlewares.use('/__cloudflare-publish-status', handleCloudflarePublishStatus);
       server.middlewares.use('/__cloudflare-login-start', handleCloudflareLoginStart);
       server.middlewares.use('/__cloudflare-logout', handleCloudflareLogout);
+      server.middlewares.use('/__cloudflare-auth-status', handleCloudflareAuthStatus);
 
       // Resolve a relative file path to its absolute path on disk
       server.middlewares.use('/__resolve-file-path', (req, res) => {
@@ -237,6 +293,15 @@ export function protovibeSourcePlugin(): Plugin {
       // Sketchpad endpoints
       registerSketchpadMiddleware(server);
 
+      // Comments & Notes endpoints
+      registerCommentsMiddleware(server);
+
+      // Shared comment-author profile (~/.protovibe/profile.json)
+      registerProfileMiddleware(server);
+
+      // Git sync endpoints
+      registerGitMiddleware(server);
+
       // Manual server restart endpoint (triggered by error banner in UI)
       server.middlewares.use('/__restart-server', async (req, res) => {
         if (req.method === 'POST') {
@@ -282,14 +347,29 @@ export function protovibeSourcePlugin(): Plugin {
             return [];
           }
 
-          return [
-            {
-              tag: 'script',
-              attrs: {},
-              children: fs.readFileSync(sketchpadBridgePath, 'utf-8'),
-              injectTo: 'body',
-            },
-          ];
+          const tags: HtmlTagDescriptor[] = [];
+
+          // Persistent webfont links so the custom font never flashes to a
+          // fallback during the CSS HMR swap that follows each canvas mutation.
+          const webfontHrefs = getWebfontHrefs();
+          if (webfontHrefs.length > 0) {
+            tags.push(
+              { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' }, injectTo: 'head-prepend' },
+              { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }, injectTo: 'head-prepend' },
+            );
+            for (const href of webfontHrefs) {
+              tags.push({ tag: 'link', attrs: { rel: 'stylesheet', href }, injectTo: 'head-prepend' });
+            }
+          }
+
+          tags.push({
+            tag: 'script',
+            attrs: {},
+            children: fs.readFileSync(sketchpadBridgePath, 'utf-8'),
+            injectTo: 'body',
+          });
+
+          return tags;
         }
 
         return [];
@@ -302,6 +382,13 @@ export function protovibeSourcePlugin(): Plugin {
     handleHotUpdate({ file }) {
       const sketchpadsDir = normalizePath(path.resolve(process.cwd(), 'src/sketchpads'));
       if (file.startsWith(sketchpadsDir) && !file.endsWith('.tsx') && !file.endsWith('.jsx')) {
+        return [];
+      }
+      // Comment thread JSON files are pure data — writing one must not reload
+      // the user's app iframe (the anchor attribute change in the .tsx will
+      // hot-reload on its own).
+      const commentsDir = normalizePath(path.resolve(process.cwd(), 'src/comments'));
+      if (file.startsWith(commentsDir)) {
         return [];
       }
     },

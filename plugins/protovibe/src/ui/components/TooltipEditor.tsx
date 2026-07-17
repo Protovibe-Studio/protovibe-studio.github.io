@@ -28,7 +28,7 @@ export const TooltipEditor: React.FC = () => {
     if (!activeData.file) return;
 
     await runLockedMutation(async () => {
-      await takeSnapshot(activeData.file, activeSourceId!);
+      await takeSnapshot(activeData.file, activeSourceId!, undefined, newValue === '' ? `remove ${propName}` : `${propName}=${newValue}`);
       await updateProp({
         file: activeData.file,
         action: newValue === '' ? 'remove' : isMissing ? 'add' : 'edit',
@@ -51,7 +51,7 @@ export const TooltipEditor: React.FC = () => {
               await handleUpdate('data-tooltip-text', '', false, textProp.loc);
               if (dirProp) await handleUpdate('data-tooltip-dir', '', false, dirProp.loc);
             }}
-            title="Clear tooltip"
+            data-tooltip="Clear tooltip"
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '20px', height: '20px', borderRadius: '3px', border: 'none', background: 'transparent', color: theme.text_tertiary, cursor: 'pointer', padding: 0, transition: 'background 0.15s, color 0.15s' }}
             onMouseEnter={e => { e.currentTarget.style.background = theme.bg_low; e.currentTarget.style.color = theme.text_secondary; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = theme.text_tertiary; }}

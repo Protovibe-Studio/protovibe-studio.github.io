@@ -109,6 +109,17 @@ let ghostEls: HTMLElement[] = [];
 let currentActiveSourceId: string | null = null;
 let spaceHeld = false;
 
+// Cmd/Ctrl+pointerdown on an element defers the deep-click selection to
+// pointerup, so a Cmd-drag can become a marquee (owned by SketchpadApp's
+// window-level handler) instead of a click-select or element drag.
+let pendingMetaClick: {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  target: HTMLElement;
+  isMulti: boolean;
+} | null = null;
+
 window.addEventListener('blur', () => {
   spaceHeld = false;
 });
@@ -271,6 +282,112 @@ function findDropContainerAtPoint(clientX: number, clientY: number, dragTargets:
   return container;
 }
 
+// ─── Drop retention (anti-flicker) ───────────────────────────────────────────
+// When elements are dropped into a different container or frame the move is
+// persisted by rewriting source files, and Vite HMR re-renders the frames a
+// moment later. Resetting the drag transform at pointerup would snap the
+// element back to its pre-drag position until the reload lands (a visible
+// flicker), so we keep the transform applied and release it only once the DOM
+// reflects the drop:
+//  - the node was unmounted (React rendered a fresh node at the target) →
+//    nothing to restore;
+//  - React reused the node for a different block, or re-rendered the same
+//    block with a new persisted left/top (position-fallback path) → restore
+//    the original transform so the stale drag offset doesn't displace it.
+// A timeout and the `pv-sketchpad-drop-reverted` event (fired by the shell
+// when a drop sequence fails or is skipped) act as safety nets that snap the
+// elements back exactly like the old immediate reset did.
+const DROP_RETENTION_TIMEOUT_MS = 3000;
+
+interface DropRetention {
+  el: HTMLElement;
+  blockId: string;
+  origTransform: string;
+  origZIndex: string;
+  origLeft: number;
+  origTop: number;
+  timeoutId: number;
+}
+
+let dropRetentions: DropRetention[] = [];
+let dropRetentionObserver: MutationObserver | null = null;
+
+function releaseDropRetention(entry: DropRetention, restore: boolean) {
+  clearTimeout(entry.timeoutId);
+  dropRetentions = dropRetentions.filter(e => e !== entry);
+  if (restore) {
+    entry.el.style.transition = 'none';
+    entry.el.style.transform = entry.origTransform;
+    entry.el.style.zIndex = entry.origZIndex;
+    requestAnimationFrame(() => { entry.el.style.transition = ''; });
+  }
+  if (dropRetentions.length === 0 && dropRetentionObserver) {
+    dropRetentionObserver.disconnect();
+    dropRetentionObserver = null;
+  }
+}
+
+function checkDropRetentions() {
+  for (const entry of [...dropRetentions]) {
+    if (!entry.el.isConnected) {
+      releaseDropRetention(entry, false);
+      continue;
+    }
+    const currentId = entry.el.getAttribute('data-pv-sketchpad-el') || entry.el.getAttribute('data-pv-block');
+    if (currentId !== entry.blockId) {
+      releaseDropRetention(entry, true);
+      continue;
+    }
+    // Same block re-rendered with a new persisted left/top (position fallback).
+    const left = parseFloat(entry.el.style.left);
+    const top = parseFloat(entry.el.style.top);
+    if ((!Number.isNaN(left) && Math.abs(left - entry.origLeft) > 0.5) ||
+        (!Number.isNaN(top) && Math.abs(top - entry.origTop) > 0.5)) {
+      releaseDropRetention(entry, true);
+    }
+  }
+}
+
+function registerDropRetentions(targets: NonNullable<typeof dragState>['targets']) {
+  targets.forEach(t => {
+    const blockId = t.el.getAttribute('data-pv-sketchpad-el') || t.el.getAttribute('data-pv-block');
+    if (!blockId) {
+      t.el.style.transform = t.origTransform;
+      return;
+    }
+    // Keep the element painted above the drop target until the reload lands,
+    // matching what the user saw during the drag.
+    t.el.style.zIndex = '2147483640';
+    const entry: DropRetention = {
+      el: t.el,
+      blockId,
+      origTransform: t.origTransform,
+      origZIndex: t.origZIndex,
+      origLeft: t.origLeft,
+      origTop: t.origTop,
+      timeoutId: 0,
+    };
+    entry.timeoutId = window.setTimeout(() => releaseDropRetention(entry, entry.el.isConnected), DROP_RETENTION_TIMEOUT_MS);
+    dropRetentions.push(entry);
+  });
+  if (dropRetentions.length > 0 && !dropRetentionObserver) {
+    dropRetentionObserver = new MutationObserver(checkDropRetentions);
+    dropRetentionObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'data-pv-block', 'data-pv-sketchpad-el'],
+    });
+  }
+}
+
+window.addEventListener('pv-sketchpad-drop-reverted', (e) => {
+  const ids = (e as CustomEvent<{ blockIds?: string[] }>).detail?.blockIds;
+  [...dropRetentions].forEach(entry => {
+    if (!ids || ids.includes(entry.blockId)) releaseDropRetention(entry, entry.el.isConnected);
+  });
+});
+
 function applyDropTargetHighlight(el: HTMLElement | null) {
   if (!el) return;
   const a = el as any;
@@ -335,14 +452,27 @@ function collectPvLocs(el: HTMLElement): { name: string; value: string }[] {
   return locs;
 }
 
+/**
+ * Effective resize mode for a sketchpad element. An explicit data-pv-resizable
+ * attribute always wins. Without one, components (data-pv-component-id) resize
+ * width-only — their inner flex layout derives its own height — while plain
+ * HTML elements (divs/spans/svgs produced by Convert to Sketchpad) are
+ * absolutely positioned boxes and resize on both axes.
+ */
+function getResizeMode(el: HTMLElement): 'both' | 'horizontal' | 'vertical' {
+  const explicit = el.getAttribute('data-pv-resizable');
+  if (explicit === 'both' || explicit === 'horizontal' || explicit === 'vertical') return explicit;
+  return el.hasAttribute('data-pv-component-id') ? 'horizontal' : 'both';
+}
+
 /** Check if pointer is near any resizable edge/corner and return which one. */
 function getResizeEdge(el: HTMLElement, clientX: number, clientY: number): ResizeEdge | null {
   const rect = el.getBoundingClientRect();
-  const resizeMode = el.getAttribute('data-pv-resizable');
+  const resizeMode = getResizeMode(el);
   const resizeBoth = resizeMode === 'both';
-  const allowH = resizeBoth || resizeMode === 'horizontal' || resizeMode === null;
+  const allowH = resizeBoth || resizeMode === 'horizontal';
   const allowV = resizeBoth || resizeMode === 'vertical';
-  const allowLeft = resizeBoth || resizeMode === 'horizontal' || resizeMode === null;
+  const allowLeft = allowH;
 
   const nearRight = allowH && clientX >= rect.right - RESIZE_EDGE_PX && clientX <= rect.right + RESIZE_EDGE_PX;
   const nearLeft = allowLeft && clientX >= rect.left - RESIZE_EDGE_PX && clientX <= rect.left + RESIZE_EDGE_PX;
@@ -635,17 +765,16 @@ function syncOverlays() {
   }
 
   // Resize affordances: only when exactly one sketchpad-el is selected.
-  //   - SE 8x8 square for data-pv-resizable="both" (the only mode where getResizeEdge returns 'se').
-  //   - E thin vertical pill for the width-only modes (data-pv-resizable="horizontal" or
-  //     missing), where right-edge horizontal resize is allowed but the SE corner is not.
+  //   - SE 8x8 square for the 'both' mode (the only mode where getResizeEdge returns 'se').
+  //   - E thin vertical pill for the width-only 'horizontal' mode, where right-edge
+  //     horizontal resize is allowed but the SE corner is not.
   const single = selectedEls.length === 1 ? selectedEls[0] : null;
   const isSingleSketchpadEl = !!single && single.isConnected && single.hasAttribute('data-pv-sketchpad-el');
-  const resizeMode = isSingleSketchpadEl ? single!.getAttribute('data-pv-resizable') : null;
+  const resizeMode = isSingleSketchpadEl ? getResizeMode(single!) : null;
   const showSeAffordance = isSingleSketchpadEl && resizeMode === 'both';
-  // East handle covers the "width only" cases. Excludes 'both' (SE handle conveys it)
+  // East handle covers the width-only case. Excludes 'both' (SE handle conveys it)
   // and 'vertical' (no horizontal resize allowed).
-  const showEastAffordance = isSingleSketchpadEl
-    && (resizeMode === 'horizontal' || resizeMode === null);
+  const showEastAffordance = isSingleSketchpadEl && resizeMode === 'horizontal';
 
   if (showSeAffordance) {
     if (!resizeAffordance) {
@@ -1027,7 +1156,7 @@ function handlePointerDown(e: PointerEvent) {
   const primarySel = selectedEls.length === 1 ? selectedEls[0] : null;
   const selEdge = primarySel?.hasAttribute('data-pv-sketchpad-el') ? getResizeEdge(primarySel, e.clientX, e.clientY) : null;
 
-  if (primarySel && selEdge && !isMulti) {
+  if (primarySel && selEdge && !isMulti && !(e.metaKey || e.ctrlKey)) {
     e.preventDefault();
     e.stopPropagation();
     const rect = primarySel.getBoundingClientRect();
@@ -1052,6 +1181,22 @@ function handlePointerDown(e: PointerEvent) {
   }
 
   const path = getInspectablePath(e.target);
+
+  // Cmd/Ctrl held over an element: the user may be starting a marquee from on
+  // top of it (SketchpadApp's window-level handler takes over past the drag
+  // threshold). Defer the deep-click selection to pointerup and let the event
+  // propagate — no stopPropagation, no drag/resize setup.
+  if ((e.metaKey || e.ctrlKey) && path.length > 0) {
+    pendingMetaClick = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      target: path[path.length - 1],
+      isMulti,
+    };
+    e.preventDefault();
+    return;
+  }
 
   // Custom double-click drill-down interception
   if (isDoubleClick && selectedEls.length === 1 && path.includes(selectedEls[0]) && !isMulti) {
@@ -1079,10 +1224,8 @@ function handlePointerDown(e: PointerEvent) {
   let isClickingSelected = false;
 
   if (path.length > 0) {
-    if (e.metaKey || e.ctrlKey) {
-      // Cmd/Ctrl + Click -> Direct deep selection
-      nextTarget = path[path.length - 1];
-    } else if (!isMulti && selectedEls.some(sel => path.includes(sel))) {
+    // (Cmd/Ctrl deep selection already returned above as a deferred click.)
+    if (!isMulti && selectedEls.some(sel => path.includes(sel))) {
       // Clicked down on an already selected element in a group -> keep group selection to drag it
       nextTarget = selectedEls.find(sel => path.includes(sel))!;
       isClickingSelected = true;
@@ -1144,6 +1287,11 @@ function handlePointerDown(e: PointerEvent) {
   }
 
   const dragTargets = selectedEls.includes(nextTarget) ? selectedEls : [nextTarget];
+  // A new drag on a still-retained element must start from its true layout
+  // position, so settle any pending drop retention first.
+  [...dropRetentions].forEach(entry => {
+    if (dragTargets.includes(entry.el)) releaseDropRetention(entry, true);
+  });
   const frameForDragSnap = findFrameContainer(nextTarget);
   const dragAllAbsolute = dragTargets.every(t => t.hasAttribute('data-pv-sketchpad-el'));
   dragState = {
@@ -1175,6 +1323,14 @@ function handlePointerMove(e: PointerEvent) {
     clearHover();
     clearForcedCursor();
     return;
+  }
+
+  // A Cmd/Ctrl-drag past the threshold means the marquee took over — drop the
+  // deferred deep-click so pointerup doesn't select underneath the marquee.
+  if (pendingMetaClick && e.pointerId === pendingMetaClick.pointerId) {
+    const dx = Math.abs(e.clientX - pendingMetaClick.startX);
+    const dy = Math.abs(e.clientY - pendingMetaClick.startY);
+    if (dx >= DRAG_THRESHOLD || dy >= DRAG_THRESHOLD) pendingMetaClick = null;
   }
 
   if ((resizeState && e.pointerId === resizeState.pointerId) ||
@@ -1246,6 +1402,20 @@ function handlePointerUp(e: PointerEvent) {
     latestClientX = e.clientX;
     latestClientY = e.clientY;
     applyPointerMoveUpdate();
+  }
+
+  // Deferred Cmd/Ctrl deep-click: no marquee drag happened, apply the deep
+  // selection now. Don't stop propagation — SketchpadApp's pointerup still
+  // clears frame multi-selection on a plain click.
+  if (pendingMetaClick && e.pointerId === pendingMetaClick.pointerId) {
+    const pending = pendingMetaClick;
+    pendingMetaClick = null;
+    if (pending.target.isConnected) {
+      clearHover();
+      setSelection(pending.target, pending.isMulti);
+      notifyInspector(pending.target);
+    }
+    return;
   }
 
   // Handle resize end
@@ -1378,7 +1548,15 @@ function handlePointerUp(e: PointerEvent) {
           minNewTop = Math.min(minNewTop, (rect.top - containerRect.top) / zoom);
         });
 
-        dragState.targets.forEach(t => t.el.style.transform = t.origTransform);
+        if (e.altKey) {
+          // Duplicating: the originals stay where they were, so reset them now.
+          dragState.targets.forEach(t => t.el.style.transform = t.origTransform);
+        } else {
+          // Moving: keep the drag transform until HMR re-renders the frames
+          // with the element in its new home — resetting now would flash the
+          // element back at its pre-drag position for a few frames.
+          registerDropRetentions(dragState.targets);
+        }
 
         const targetLocatorId = getNearestPvLocId(dropContainer as HTMLElement);
         const targetBlockId = dropContainer.getAttribute('data-pv-block');
@@ -1526,6 +1704,12 @@ function handleKeyDown(e: KeyboardEvent) {
   }, '*');
 
   if ((e.key === 'Delete' || e.key === 'Backspace') && selectedEls.length > 0) {
+    // Only intercept when at least one selected element is a sketchpad-el
+    // (an absolute-positioned item managed by this bridge). Frame-root
+    // selections must fall through to SketchpadApp's keydown handler so it
+    // can delete the whole frame.
+    const hasSketchpadEl = selectedEls.some(el => el.hasAttribute('data-pv-sketchpad-el'));
+    if (!hasSketchpadEl) return;
     e.preventDefault();
     e.stopPropagation();
     selectedEls.forEach(el => {
@@ -1728,14 +1912,12 @@ function init() {
   window.addEventListener('pv-select-frame-root', ((e: CustomEvent<{ frameId?: string }>) => {
     const frameId = e.detail.frameId;
     if (!frameId) return;
-    // Don't override an existing inspector selection — the user may have already
-    // drilled into a child block, and the title click should leave that alone.
-    if (selectedEls.length > 0) return;
     const frameEl = document.querySelector(`[data-sketchpad-frame="${frameId}"]`) as HTMLElement | null;
     if (!frameEl) return;
     const root = findFrameRoot(frameEl);
     if (!root) return;
     clearHover();
+    clearSelection();
     setSelection(root, false);
     notifyInspector(root, true);
     // Tell SketchpadApp we actually selected — used to one-shot suppress the

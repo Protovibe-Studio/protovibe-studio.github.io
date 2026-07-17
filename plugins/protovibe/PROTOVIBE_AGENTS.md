@@ -211,6 +211,36 @@ Never create custom HTML elements (`<button>`, `<input>`) when an existing compo
 
 When creating or editing reusable components in `src/components/ui/`, they must be registered via `pvConfig`.
 
+### Rule: `src/components/ui/` Is Only for Registered "Dumb" Components
+
+`src/components/ui/` is exclusively for presentational ("dumb") components that export a `pvConfig`. Every file you add here MUST export a `pvConfig` — that is how the visual builder discovers it, lists it in the Components playground, and lets the inspector's "Source files" panel jump to it. A file placed here **without** a `pvConfig` has no playground entry, so clicking through to it goes nowhere.
+
+Anything that is not a registered visual-builder component — stateful containers, data-fetching wrappers, layout/page shells, hooks, context providers, or other logic-heavy helpers — MUST live in a different folder (e.g. `src/components/` outside `ui/`, or a feature folder). Never drop unregistered or "smart" components into `src/components/ui/`.
+
+* **❌ BAD: A smart/unregistered component inside `src/components/ui/`**
+
+  ```tsx
+  // src/components/ui/user-dashboard.tsx  ← wrong folder, no pvConfig
+  export function UserDashboard() {
+    const { data } = useUsers();
+    return <div>{/* fetches + renders app data */}</div>;
+  }
+  ```
+
+* **✅ GOOD: Dumb + registered in `ui/`, smart component elsewhere**
+
+  ```tsx
+  // src/components/ui/stat-card.tsx  ← presentational, exports pvConfig
+  export function StatCard({ ...props }) { return <div {...props} data-pv-component-id="StatCard" />; }
+  export const pvConfig = { name: 'StatCard', /* ... */ };
+
+  // src/components/user-dashboard.tsx  ← smart component, outside ui/
+  export function UserDashboard() {
+    const { data } = useUsers();
+    return <StatCard /* ... */ />;
+  }
+  ```
+
 ### Rule: One `pvConfig` Per File
 
 The scanner strictly looks for `export const pvConfig`. You cannot rename it or have multiple configurations in a single file.
@@ -603,6 +633,13 @@ Pass exactly **one static string** of all internal classes as the first argument
 
 ## 4. Adding Interaction
 
+### Rule: Dialogs and Tabs Live in the URL Query String
+
+Dialog visibility and active tab selection must be driven by URL query-string parameters, not local component state, so any UI state can be deep-linked (e.g. `?view=employees&employeeDialog=true&settingsTab=billing`). Follow the app's existing query-string routing pattern — do not introduce react-router or any other routing library.
+
+* Give each dialog its own key set to `true` when open (`employeeDialog=true`); when closed, **remove the key** from the URL instead of setting it to `false`.
+* Give each tab group its own key holding the active tab id (`settingsTab=billing`); omit the key when the default tab is active.
+
 ### Rule: Compound Components (Context State)
 
 Certain parent-child component pairs manage item state implicitly via React Context (e.g., `Tabs`, `RadioGroup`).
@@ -764,3 +801,127 @@ When adding static images (PNG, JPG, SVG) as visual elements in application page
   ```tsx
   <div className="bg-[url('/src/images/from-protovibe/hero-bg.svg')] bg-contain bg-center bg-no-repeat aspect-[4/3]" />
   ```
+
+### Rule: Match Specificity When Overriding Component Styles
+
+When overriding a component's styles from the consumer file, match the specificity of the original class by including the same `data-[...]:` prefix. 
+
+* **❌ BAD: Override loses to component's data-attribute class**
+
+  ```tsx
+  <Button variant="ghost" className="bg-background-primary" />
+  ```
+
+* **✅ GOOD: Override matches the data-attribute specificity**
+
+  ```tsx
+  <Button variant="ghost" className="data-[variant=ghost]:bg-background-primary" />
+  ```
+
+## 5. Comments & Notes
+
+Protovibe supports element-level commenting so designers and developers can leave
+collaborative feedback directly on the canvas. As an AI agent you can read these
+comments for context and, when the user asks, create or resolve them
+programmatically.
+
+### Rule: Where comments live
+
+Each comment thread is a directory at `src/comments/{threadId}/`. One directory
+== one thread == one anchored element. It contains:
+
+* `thread.json` — thread metadata **only** (never any messages): the triage
+  `status`, the authoring `context` (App / Components / Sketchpad, plus the app
+  URL, component name, or sketchpad frame + coordinates), `createdAt`, and
+  `anchorFile`.
+* `{commentId}.json` — **one file per message**, Git-commit style (author
+  name/email, content, timestamps).
+
+Messages are split into their own files on purpose: two people replying to the
+same thread on different machines create two *different new files*, so Git sync
+merges them cleanly instead of a same-file conflict silently dropping one reply.
+These files are normal source files and **should be committed to Git** (they are
+not gitignored).
+
+```jsonc
+// src/comments/ab12cd34ef/thread.json
+{
+  "id": "ab12cd34ef",
+  "status": "review",              // optional status id — "minor" | "todo" | "review" | "closed"; omitted while untriaged (labels/colours live in the UI's STATUS_CONFIG)
+  "context": { "tab": "app", "file": "src/pages/DashboardPage.tsx", "pathname": "/dashboard" },
+  "createdAt": "2026-06-27T10:00:00.000Z",
+  "anchorFile": "src/pages/DashboardPage.tsx"
+}
+
+// src/comments/ab12cd34ef/c-x7y8z9.json — one message
+{
+  "id": "c-x7y8z9",
+  "author": { "name": "Jane", "email": "jane@x.com" },
+  "content": "Tighten this spacing",
+  "createdAt": "2026-06-27T10:00:00.000Z",
+  "seenBy": ["Jane", "Alex"],      // optional read receipts — names that have seen this message; omitted/[] = unseen
+  "suggestions": [                 // optional UX-writing suggestions: swap an exact string for a proposed one
+    { "original": "Sign up", "suggested": "Create account" }
+  ]
+}
+```
+
+> **Legacy format.** Older projects store a whole thread as one file,
+> `src/comments/comment-{threadId}.json`, with an inline `comments` array.
+> These are still read (and merged with any split-layout files for the same
+> thread id — a `{threadId}/{commentId}.json` file shadows the inline message
+> with the same id). Never create new threads in this format, and **never
+> append to an inline `comments` array** — that reintroduces the sync conflict.
+> Add new messages as separate `src/comments/{threadId}/{commentId}.json` files
+> even when the thread itself is a legacy file.
+
+### Rule: The `data-pv-comment-{id}` attribute
+
+When a comment is added, Protovibe injects a valueless `data-pv-comment-{id}`
+attribute onto the opening tag of the anchored element. The `{id}` matches the
+thread's JSON filename. An element can anchor **several threads** — each gets its
+**own** attribute (`data-pv-comment-id1 data-pv-comment-id2`), so the names never
+collide. Match one with the CSS selector `[data-pv-comment-{id}]`.
+
+> An earlier version used a single `data-pv-comment-thread="id1 id2"` list
+> attribute (which could collide into duplicate attributes). Never write that form.
+
+* **Never remove these attributes** during refactors unless you are deleting the
+  element itself (in which case also delete the matching `src/comments/{id}/`
+  directory — and the legacy `src/comments/comment-{id}.json` if present — for
+  every `data-pv-comment-{id}` it carries).
+* When extracting an element into a new component, **preserve every
+  `data-pv-comment-{id}` attribute** on the new root element so the comments stay
+  anchored.
+
+### Rule: Editing comments programmatically
+
+To add or resolve comments on the user's behalf, work file-per-message:
+
+* **Add a message / reply**: create a new `src/comments/{threadId}/{commentId}.json`
+  file (random id, e.g. `c-` + 8 lowercase alphanumerics). Never rewrite an
+  existing message file to append, and never append to a legacy file's inline
+  `comments` array.
+* **Change a thread's status**: edit `src/comments/{threadId}/thread.json`. For
+  a legacy thread that has no directory yet, create the directory and write a
+  `thread.json` (copying `id`, `context`, `createdAt`, `anchorFile` from the
+  legacy file) with the new `status` — once `thread.json` exists it is
+  authoritative for metadata.
+* **Anchor a brand-new thread**: create `src/comments/{threadId}/` with
+  `thread.json` + the first message file, **and** add the valueless
+  `data-pv-comment-{id}` attribute to the target element so the two stay in sync.
+
+Do not edit these files unless the user asks you to.
+
+### Rule: Wording suggestions are advisory, not source edits
+
+A comment may carry a `suggestions` array (`{ original, suggested }` pairs) — a UX
+writer proposing replacement copy for exact strings on the anchored element. These
+are **advisory metadata only**: the UI previews them by find/replacing the string in
+the live canvas DOM (never touching source). If the user asks you to *apply* a
+suggestion, make the real edit in the JSX (respecting the pv-block rules above) and
+leave the `suggestions` entry as the record of what was requested — do not treat the
+presence of a suggestion as an automatic code change.
+
+### Rule: don't edit PROTOVIBE_AGENTS.md
+This file will be overriden by future Protovibe updates. If user wants to store some info for AI agents, store it in the root AGENTS.md file, not PROTOVIBE_AGENTS.md
