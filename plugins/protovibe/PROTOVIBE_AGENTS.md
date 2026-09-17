@@ -640,6 +640,14 @@ Dialog visibility and active tab selection must be driven by URL query-string pa
 * Give each dialog its own key set to `true` when open (`employeeDialog=true`); when closed, **remove the key** from the URL instead of setting it to `false`.
 * Give each tab group its own key holding the active tab id (`settingsTab=billing`); omit the key when the default tab is active.
 
+## Deep-linkable UI state
+
+Any UI state that *can* be represented in the URL query string MUST be handled via the query string (through the store's `state.queryParams` / `setQueryParams`), not `useState`, so every state is deep-linkable and back/forward safe. This covers dialogs, active tabs/sub-tabs, and toggles/checkboxes (e.g. "Show gender pay gap"), etc. — not just tabs.
+
+- Derive the value from `state.queryParams` and validate it; fall back to the default when the param is missing or invalid.
+- Drop the key from the URL when the state is at its default (e.g. a checkbox that is off, or the default tab) so a clean URL means the default — set the param only for non-default values.
+- Booleans use `'true'` when on and `null` (omitted) when off. See `genderPayGap` / `country` / `protoState` in [src/pages/hr/compensation-bands.tsx](./src/pages/hr/compensation-bands.tsx) for the reference pattern.
+
 ### Rule: Compound Components (Context State)
 
 Certain parent-child component pairs manage item state implicitly via React Context (e.g., `Tabs`, `RadioGroup`).
@@ -770,6 +778,9 @@ Never add custom Tailwind classes for text styling. Instead, use the `TextBlock`
   <TextBlock typography="all-caps">Section Title</TextBlock>
   ```
 
+## Rule: no manual text styles for text components
+Components already have font sizes baked in their props. Do not manually add font size or weight unless user clearly asks. By default never use text-paragraph component and add font-size override. 
+
 ### Rule: Avoid Rarely-Used Inline HTML Tags
 
 Don't reach for tags like `<code>`, `<kbd>`, `<samp>`, `<var>`, `<mark>`, `<abbr>`, `<cite>`, `<q>`, `<sub>`, `<sup>`, `<small>`. Use a plain `<span>` with Tailwind classes instead — it gives the visual builder a single, predictable styling target and keeps inline text editable without surprising semantic markup.
@@ -821,65 +832,23 @@ When overriding a component's styles from the consumer file, match the specifici
 ## 5. Comments & Notes
 
 Protovibe supports element-level commenting so designers and developers can leave
-collaborative feedback directly on the canvas. As an AI agent you can read these
-comments for context and, when the user asks, create or resolve them
-programmatically.
+collaborative feedback directly on the canvas. As an AI agent you can **read these
+comments for context freely**; create, edit or resolve them only when the user asks.
 
-### Rule: Where comments live
+Each thread is a directory at `src/comments/{threadId}/` holding `thread.json`
+(metadata only) plus one `{commentId}.json` file per message. These files are
+committed to git.
 
-Each comment thread is a directory at `src/comments/{threadId}/`. One directory
-== one thread == one anchored element. It contains:
-
-* `thread.json` — thread metadata **only** (never any messages): the triage
-  `status`, the authoring `context` (App / Components / Sketchpad, plus the app
-  URL, component name, or sketchpad frame + coordinates), `createdAt`, and
-  `anchorFile`.
-* `{commentId}.json` — **one file per message**, Git-commit style (author
-  name/email, content, timestamps).
-
-Messages are split into their own files on purpose: two people replying to the
-same thread on different machines create two *different new files*, so Git sync
-merges them cleanly instead of a same-file conflict silently dropping one reply.
-These files are normal source files and **should be committed to Git** (they are
-not gitignored).
-
-```jsonc
-// src/comments/ab12cd34ef/thread.json
-{
-  "id": "ab12cd34ef",
-  "status": "review",              // optional status id — "minor" | "todo" | "review" | "closed"; omitted while untriaged (labels/colours live in the UI's STATUS_CONFIG)
-  "context": { "tab": "app", "file": "src/pages/DashboardPage.tsx", "pathname": "/dashboard" },
-  "createdAt": "2026-06-27T10:00:00.000Z",
-  "anchorFile": "src/pages/DashboardPage.tsx"
-}
-
-// src/comments/ab12cd34ef/c-x7y8z9.json — one message
-{
-  "id": "c-x7y8z9",
-  "author": { "name": "Jane", "email": "jane@x.com" },
-  "content": "Tighten this spacing",
-  "createdAt": "2026-06-27T10:00:00.000Z",
-  "seenBy": ["Jane", "Alex"],      // optional read receipts — names that have seen this message; omitted/[] = unseen
-  "suggestions": [                 // optional UX-writing suggestions: swap an exact string for a proposed one
-    { "original": "Sign up", "suggested": "Create account" }
-  ]
-}
-```
-
-> **Legacy format.** Older projects store a whole thread as one file,
-> `src/comments/comment-{threadId}.json`, with an inline `comments` array.
-> These are still read (and merged with any split-layout files for the same
-> thread id — a `{threadId}/{commentId}.json` file shadows the inline message
-> with the same id). Never create new threads in this format, and **never
-> append to an inline `comments` array** — that reintroduces the sync conflict.
-> Add new messages as separate `src/comments/{threadId}/{commentId}.json` files
-> even when the thread itself is a legacy file.
+> **Writing comments?** Read
+> [agents-skills/comments-notes.md](./agents-skills/comments-notes.md) first —
+> full schemas, status ids, the legacy format, attachments, wording suggestions
+> and the file-per-message rule that keeps git sync safe.
 
 ### Rule: The `data-pv-comment-{id}` attribute
 
 When a comment is added, Protovibe injects a valueless `data-pv-comment-{id}`
 attribute onto the opening tag of the anchored element. The `{id}` matches the
-thread's JSON filename. An element can anchor **several threads** — each gets its
+thread's directory name. An element can anchor **several threads** — each gets its
 **own** attribute (`data-pv-comment-id1 data-pv-comment-id2`), so the names never
 collide. Match one with the CSS selector `[data-pv-comment-{id}]`.
 
@@ -891,27 +860,7 @@ collide. Match one with the CSS selector `[data-pv-comment-{id}]`.
   directory — and the legacy `src/comments/comment-{id}.json` if present — for
   every `data-pv-comment-{id}` it carries).
 * When extracting an element into a new component, **preserve every
-  `data-pv-comment-{id}` attribute** on the new root element so the comments stay
-  anchored.
-
-### Rule: Editing comments programmatically
-
-To add or resolve comments on the user's behalf, work file-per-message:
-
-* **Add a message / reply**: create a new `src/comments/{threadId}/{commentId}.json`
-  file (random id, e.g. `c-` + 8 lowercase alphanumerics). Never rewrite an
-  existing message file to append, and never append to a legacy file's inline
-  `comments` array.
-* **Change a thread's status**: edit `src/comments/{threadId}/thread.json`. For
-  a legacy thread that has no directory yet, create the directory and write a
-  `thread.json` (copying `id`, `context`, `createdAt`, `anchorFile` from the
-  legacy file) with the new `status` — once `thread.json` exists it is
-  authoritative for metadata.
-* **Anchor a brand-new thread**: create `src/comments/{threadId}/` with
-  `thread.json` + the first message file, **and** add the valueless
-  `data-pv-comment-{id}` attribute to the target element so the two stay in sync.
-
-Do not edit these files unless the user asks you to.
+  `data-pv-comment-{id}` attribute** on the new root element.
 
 ### Rule: Wording suggestions are advisory, not source edits
 
@@ -923,5 +872,57 @@ suggestion, make the real edit in the JSX (respecting the pv-block rules above) 
 leave the `suggestions` entry as the record of what was requested — do not treat the
 presence of a suggestion as an automatic code change.
 
+## 6. Specs (annotated prototype states)
+
+Protovibe's **Specs** tab lets designers document a prototype as an ordered list
+of annotated states — deep links into the app with a note and a status, grouped
+under headings — and publishes them with the prototype as a read-only viewer at
+`/specs.html`. Specs are separate from comments: different storage, endpoints
+and UI.
+
+Each spec is a directory at `src/specs/{specId}/` holding `spec.json` (metadata
+only) plus one `{itemId}.json` file per annotation (`a-…`) or heading (`h-…`).
+Order comes from each item's fractional `rank` string. These files are committed
+to git. Do not edit them unless the user asks you to.
+
+> **Writing specs or annotations?** Read
+> [agents-skills/specs-annotations.md](./agents-skills/specs-annotations.md)
+> first — full schemas, id formats, the `rank` ordering scheme and the rules for
+> pinning an annotation to an element.
+
+### Rule: The `data-pv-spec-{id}` attribute
+
+An annotation pinned to an element carries a valueless `data-pv-spec-{itemId}`
+attribute on that element's opening tag (exactly like `data-pv-comment-{id}`).
+It is a plain JSX attribute and survives the production build, which is how the
+published viewer highlights the element.
+
+* **Never remove these attributes** during refactors unless you are deleting the
+  element itself — then also remove the `anchor` field from the matching
+  `src/specs/{specId}/{itemId}.json` (the annotation keeps working, unpinned).
+* When extracting an element into a new component, **preserve every
+  `data-pv-spec-{id}` attribute** on the new root element.
+* Because annotations restore state through the URL, keep dialogs, tabs and
+  toggles in the query string (see "Deep-linkable UI state" above) — that is
+  what makes a saved state reproducible.
+
 ### Rule: don't edit PROTOVIBE_AGENTS.md
 This file will be overriden by future Protovibe updates. If user wants to store some info for AI agents, store it in the root AGENTS.md file, not PROTOVIBE_AGENTS.md
+
+## 7. Agent skills
+
+Deeper, task-specific instructions live next to this file in
+[agents-skills/](./agents-skills/). Read the relevant one in full before
+starting that kind of task — the summaries above are not enough to do the work
+correctly.
+
+* **Asked to create, edit or assemble specs or annotations programmatically?**
+  Read [agents-skills/specs-annotations.md](./agents-skills/specs-annotations.md)
+  first. It covers the file schema, id formats, the `rank` ordering scheme, the
+  `data-pv-spec-*` element attribute and the rules that keep spec files safe to
+  sync.
+* **Asked to write, reply to, triage or delete comments programmatically?**
+  Read [agents-skills/comments-notes.md](./agents-skills/comments-notes.md)
+  first. It covers the thread and message schemas, status ids, the legacy
+  single-file format, attachments, wording suggestions and the file-per-message
+  rule.

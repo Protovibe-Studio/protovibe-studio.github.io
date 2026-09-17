@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useProtovibe } from '../context/ProtovibeContext';
 import { undo, redo, takeSnapshot, addBlock, deleteBlocks, unwrapBlock, uploadImage } from '../api/client';
 import { collectChildPositions } from '../utils/unwrapGeometry';
@@ -16,7 +16,7 @@ import {
   getAllowedChildren,
   getAllowedSibling,
 } from '../utils/traversal';
-import { isTypingInput } from '../utils/elementType';
+import { isTypingInput, hasTextSelectionInFocusedDocument } from '../utils/elementType';
 
 export function useKeyboardShortcuts() {
   const { 
@@ -31,8 +31,27 @@ export function useKeyboardShortcuts() {
     clearFocus,
     focusNewBlock,
     isMutationLocked,
-    runLockedMutation
+    runLockedMutation,
+    isLoading,
+    isZonesLoading,
   } = useProtovibe();
+
+  // Selecting elements (click, marquee, empty frame root) kicks off async
+  // fetches of the source file info and then its editable zones. Until both
+  // land, `activeData` and `zones` are null/stale, so Delete or Paste pressed
+  // in that window used to be silently dropped (or refused with a toast) and
+  // the user had to click and retry. Instead we park the action here and
+  // replay it once the selection is ready.
+  const isSelectionLoading = isLoading || isZonesLoading;
+  const isSelectionLoadingRef = useRef(isSelectionLoading);
+  isSelectionLoadingRef.current = isSelectionLoading;
+  const pendingActionRef = useRef<PendingAction | null>(null);
+
+  // A new selection supersedes any action parked for the previous one.
+  // Declared before the listener effect so it runs first in the same commit.
+  useEffect(() => {
+    pendingActionRef.current = null;
+  }, [currentBaseTarget, selectedTargets]);
 
   useEffect(() => {
     if (!inspectorOpen) return;
@@ -50,7 +69,7 @@ export function useKeyboardShortcuts() {
 
         const tryFocus = () => {
           const selector = `[data-pv-loc-app-${sourceId}], [data-pv-loc-ui-${sourceId}]`;
-          const allIframes = Array.from(document.querySelectorAll('iframe')) as HTMLIFrameElement[];
+          const allIframes = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')) as HTMLIFrameElement[];
           let target: HTMLElement | null = null;
 
           for (const iframe of allIframes) {
@@ -98,6 +117,19 @@ export function useKeyboardShortcuts() {
         return;
       }
 
+      // 1.6. Defer Delete while the selection is still loading. Replayed at
+      // the end of this effect once the selection is ready.
+      if (
+        (e.key === 'Backspace' || e.key === 'Delete') &&
+        !e.metaKey && !e.ctrlKey && !e.altKey &&
+        isSelectionLoadingRef.current &&
+        currentBaseTarget
+      ) {
+        e.preventDefault();
+        pendingActionRef.current = { type: 'delete', key: e.key };
+        return;
+      }
+
       // 2. Undo & Redo
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault();
@@ -114,11 +146,12 @@ export function useKeyboardShortcuts() {
               window.history.pushState({}, '', res.currentURLQueryString);
               window.dispatchEvent(new PopStateEvent('popstate'));
             }
-            Array.from(document.querySelectorAll('iframe')).forEach((iframe) => {
+            Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')).forEach((iframe) => {
               iframe.contentWindow?.postMessage({ type: 'PV_UNDO_REDO_COMPLETE' }, '*');
             });
             // Refresh the comments panel so undone/redone threads & replies sync.
             window.dispatchEvent(new CustomEvent('pv-comments-refresh'));
+            window.dispatchEvent(new CustomEvent('pv-specs-refresh'));
             emitToast({ message: formatUndoRedoMessage(isRedo ? 'Redo' : 'Undo', res), variant: 'info', durationMs: 1600 });
           } else {
             emitToast({ message: isRedo ? 'Nothing to redo' : 'Nothing to undo', variant: 'error', durationMs: 800 });
@@ -137,11 +170,12 @@ export function useKeyboardShortcuts() {
               window.history.pushState({}, '', res.currentURLQueryString);
               window.dispatchEvent(new PopStateEvent('popstate'));
             }
-            Array.from(document.querySelectorAll('iframe')).forEach((iframe) => {
+            Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')).forEach((iframe) => {
               iframe.contentWindow?.postMessage({ type: 'PV_UNDO_REDO_COMPLETE' }, '*');
             });
             // Refresh the comments panel so undone/redone threads & replies sync.
             window.dispatchEvent(new CustomEvent('pv-comments-refresh'));
+            window.dispatchEvent(new CustomEvent('pv-specs-refresh'));
             emitToast({ message: formatUndoRedoMessage('Redo', res), variant: 'info', durationMs: 1600 });
           } else {
             emitToast({ message: 'Nothing to redo', variant: 'error', durationMs: 800 });
@@ -175,6 +209,10 @@ export function useKeyboardShortcuts() {
           // in a server-side clipboard, so no browser clipboard data is needed
           // — perform the paste-after directly here.
           e.preventDefault();
+          if (isSelectionLoadingRef.current) {
+            pendingActionRef.current = { type: 'paste', after: true, imageFile: null };
+            return;
+          }
           await pasteBlock(true);
           return;
         }
@@ -184,6 +222,13 @@ export function useKeyboardShortcuts() {
         return;
       }
       if ((e.metaKey || e.ctrlKey) && (key === 'c' || key === 'x' || key === 'd')) {
+        // If the user has text selected (e.g. a comment or a code reference in
+        // the shell UI), let the browser perform its native copy/cut instead
+        // of copying the focused block. Only when nothing is selected does
+        // Cmd+C / Cmd+X act on the block.
+        if (key !== 'd' && hasTextSelectionInFocusedDocument()) {
+          return;
+        }
         e.preventDefault();
         const targets = selectedTargets?.length > 0 ? selectedTargets : (currentBaseTarget ? [currentBaseTarget] : []);
         const blockIds = [...new Set(
@@ -362,7 +407,7 @@ export function useKeyboardShortcuts() {
               : null;
           if (frameContainer) {
             e.preventDefault();
-            const iframeEl = (Array.from(document.querySelectorAll('iframe')) as HTMLIFrameElement[])
+            const iframeEl = (Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')) as HTMLIFrameElement[])
               .find(f => f.contentDocument === currentBaseTarget.ownerDocument) ?? null;
             iframeEl?.contentWindow?.postMessage({ type: 'PV_FRAME_DELETE_REQUEST' }, '*');
             return;
@@ -408,7 +453,7 @@ export function useKeyboardShortcuts() {
 
         if (isAbsolute && inAbsoluteContainer) {
           e.preventDefault();
-          Array.from(document.querySelectorAll('iframe')).forEach(iframe => {
+          Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')).forEach(iframe => {
             iframe.contentWindow?.postMessage({
               type: 'PV_NUDGE_KEYDOWN',
               key: e.key,
@@ -455,7 +500,7 @@ export function useKeyboardShortcuts() {
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        Array.from(document.querySelectorAll('iframe')).forEach(iframe => {
+        Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')).forEach(iframe => {
           iframe.contentWindow?.postMessage({
             type: 'PV_NUDGE_KEYUP',
             key: e.key
@@ -575,14 +620,22 @@ export function useKeyboardShortcuts() {
     const handlePaste = async (e: ClipboardEvent) => {
       if (isMutationLocked) return;
       if (isTypingInput(e.target as HTMLElement)) return;
-      if (!activeData?.file) return;
       if (!currentBaseTarget) return;
 
+      // Clipboard items are only readable synchronously during the event, so
+      // extract the image (if any) before deciding whether to defer.
       const items = e.clipboardData?.items;
       const imageItem = items
         ? Array.from(items).find(it => it.kind === 'file' && it.type.startsWith('image/'))
         : null;
       const imageFile = imageItem?.getAsFile() || null;
+
+      if (isSelectionLoadingRef.current) {
+        e.preventDefault();
+        pendingActionRef.current = { type: 'paste', after: false, imageFile };
+        return;
+      }
+      if (!activeData?.file) return;
 
       if (imageFile) {
         e.preventDefault();
@@ -622,18 +675,41 @@ export function useKeyboardShortcuts() {
     window.addEventListener('dragover', handleDragOver);
     window.addEventListener('drop', handleDrop);
 
-    // Mirror drag/drop listeners onto same-origin iframe documents so users can
-    // drop image files onto the canvas (which lives inside an iframe).
+    // Replay an action parked while the selection was loading. This effect
+    // re-runs with fresh `activeData` / `zones` once both fetches settle, and
+    // the listeners above are already registered, so a re-dispatched Delete
+    // reaches a handler that can act on it.
+    if (!isSelectionLoading && pendingActionRef.current) {
+      const action = pendingActionRef.current;
+      pendingActionRef.current = null;
+      if (currentBaseTarget) {
+        if (action.type === 'delete') {
+          window.dispatchEvent(new KeyboardEvent('keydown', { key: action.key, bubbles: true, cancelable: true }));
+        } else if (action.imageFile) {
+          void insertImageFile(action.imageFile);
+        } else {
+          void pasteBlock(action.after);
+        }
+      }
+    }
+
+    // Mirror drag/drop and paste listeners onto same-origin iframe documents so
+    // users can drop image files onto the canvas (which lives inside an iframe)
+    // and so Cmd+V works while a canvas iframe holds keyboard focus — the native
+    // `paste` event fires in the focused document and never reaches the shell
+    // window. (The sketchpad, for instance, keeps focus after a frame is
+    // selected on the canvas.)
     const attachedDocs = new WeakSet<Document>();
     const attachToIframeDoc = (doc: Document | null | undefined) => {
       if (!doc || attachedDocs.has(doc)) return;
       attachedDocs.add(doc);
       doc.addEventListener('dragover', handleDragOver as unknown as EventListener);
       doc.addEventListener('drop', handleDrop as unknown as EventListener);
+      doc.addEventListener('paste', handlePaste as unknown as EventListener);
     };
     const iframeLoadHandlers = new Map<HTMLIFrameElement, () => void>();
     const wireIframes = () => {
-      Array.from(document.querySelectorAll('iframe')).forEach((iframe) => {
+      Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')).forEach((iframe) => {
         const el = iframe as HTMLIFrameElement;
         try { attachToIframeDoc(el.contentDocument); } catch {}
         if (!iframeLoadHandlers.has(el)) {
@@ -655,15 +731,20 @@ export function useKeyboardShortcuts() {
       window.removeEventListener('drop', handleDrop);
       iframeObserver.disconnect();
       iframeLoadHandlers.forEach((handler, el) => el.removeEventListener('load', handler));
-      Array.from(document.querySelectorAll('iframe')).forEach((iframe) => {
+      Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')).forEach((iframe) => {
         try {
           const doc = (iframe as HTMLIFrameElement).contentDocument;
           if (doc) {
             doc.removeEventListener('dragover', handleDragOver as unknown as EventListener);
             doc.removeEventListener('drop', handleDrop as unknown as EventListener);
+            doc.removeEventListener('paste', handlePaste as unknown as EventListener);
           }
         } catch {}
       });
     };
-  }, [inspectorOpen, currentBaseTarget, activeSourceId, activeData, focusElement, refreshActiveData, zones, focusNewBlock, isMutationLocked, runLockedMutation]);
+  }, [inspectorOpen, currentBaseTarget, activeSourceId, activeData, focusElement, refreshActiveData, zones, focusNewBlock, isMutationLocked, runLockedMutation, isSelectionLoading]);
 }
+
+type PendingAction =
+  | { type: 'delete'; key: string }
+  | { type: 'paste'; after: boolean; imageFile: File | null };

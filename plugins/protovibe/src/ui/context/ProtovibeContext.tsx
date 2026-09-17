@@ -29,6 +29,8 @@ interface ProtovibeContextType {
   sourceDataList: SourceData[];
   activeData: any | null;
   isLoading: boolean;
+  /** True from the moment a selection changes until its editable zones have been fetched. */
+  isZonesLoading: boolean;
   refreshActiveData: () => Promise<void>;
   toggleInspector: (forceState?: boolean) => void;
   highlightedElement: HTMLElement | null;
@@ -36,7 +38,8 @@ interface ProtovibeContextType {
   sources: string[];
   setSources: (ids: string[]) => void;
   zones: Zone[];
-  focusElement: (el: HTMLElement | HTMLElement[], skipSnapshot?: boolean) => void;
+  /** `keepShellFocus` leaves a focused shell control alone (e.g. a text editor whose click selects the element). */
+  focusElement: (el: HTMLElement | HTMLElement[], skipSnapshot?: boolean, keepShellFocus?: boolean) => void;
   clearFocus: () => void;
   focusNewBlock: (blockId: string | string[], options?: { maxAttempts?: number; initialDelay?: number; interval?: number }) => void;
   isMutationLocked: boolean;
@@ -65,6 +68,8 @@ export const ProtovibeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isLoading, setIsLoading] = useState(false);
   const [highlightedElement, _setHighlightedElement] = useState<HTMLElement | null>(null);
   const [zones, setZones] = useState<Zone[]>([]);
+  const [isZonesLoading, setIsZonesLoading] = useState(false);
+  const zonesRequestIdRef = useRef(0);
   const [isMutationLocked, setIsMutationLocked] = useState(false);
   const [themeColors, setThemeColors] = useState<ThemeColor[]>([]);
   const [themeTokens, setThemeTokens] = useState<ThemeToken[]>([]);
@@ -121,10 +126,17 @@ export const ProtovibeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (currentSources.length === 0) {
       setSourceDataList([]);
       setZones([]);
+      setIsLoading(false);
+      setIsZonesLoading(false);
       return;
     }
 
     setIsLoading(true);
+    // Zones are fetched in a second round trip once the source info lands
+    // (effect below). Flag them as loading now so consumers see one
+    // continuous "selection not ready" window instead of a gap between the
+    // two fetches during which `zones` still belongs to the previous source.
+    setIsZonesLoading(true);
     const results: SourceData[] = [];
     for (const id of currentSources) {
       try {
@@ -179,15 +191,24 @@ export const ProtovibeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Refetch zones whenever the active tab (source) changes
   useEffect(() => {
     const active = sourceDataList.find(s => s.id === activeSourceId) || sourceDataList[0];
+    const requestId = ++zonesRequestIdRef.current;
     if (active?.data?.file) {
+      setIsZonesLoading(true);
       fetchZones(active.data.file, active.data.startLine, active.data.startCol, active.data.endLine)
         .then(zData => {
+          if (requestId !== zonesRequestIdRef.current) return;
           if (zData.zones) setZones(zData.zones);
           else setZones([]);
+          setIsZonesLoading(false);
         })
-        .catch(() => setZones([]));
+        .catch(() => {
+          if (requestId !== zonesRequestIdRef.current) return;
+          setZones([]);
+          setIsZonesLoading(false);
+        });
     } else {
       setZones([]);
+      setIsZonesLoading(false);
     }
   }, [activeSourceId, sourceDataList]);
 
@@ -232,9 +253,15 @@ export const ProtovibeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // When the user clicks inside any iframe, dispatch a synthetic mousedown on the
   // shell document so all click-outside handlers (dropdowns, menus, etc.) close automatically.
+  // Also clear any text selection in the shell: the canvas bridge calls
+  // preventDefault on pointerdown, so the iframe never takes focus and the
+  // browser does not collapse the shell's selection on its own. Without this,
+  // text highlighted in the shell (e.g. a comment) would keep hijacking
+  // Cmd+C / Cmd+X after the user clicked a block on the canvas.
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (e.data?.type === 'PV_IFRAME_POINTER_DOWN') {
+        try { window.getSelection()?.removeAllRanges(); } catch {}
         document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
       }
     };
@@ -242,7 +269,7 @@ export const ProtovibeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  const focusElement = useCallback((inputEl: HTMLElement | HTMLElement[], skipSnapshot = false) => {
+  const focusElement = useCallback((inputEl: HTMLElement | HTMLElement[], skipSnapshot = false, keepShellFocus = false) => {
     const prevSourceId = activeSourceIdRef.current;
     if (!skipSnapshot && prevSourceId) {
       const prevData = sourceDataListRef.current.find(s => s.id === prevSourceId)?.data;
@@ -251,12 +278,21 @@ export const ProtovibeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     }
 
-    (document.activeElement as HTMLElement | null)?.blur?.();
-
     const els = Array.isArray(inputEl) ? inputEl : [inputEl];
     if (els.length === 0) return;
 
     const primaryEl = els[els.length - 1];
+
+    // Move keyboard focus out of whatever shell control had it so shortcuts
+    // reach the window listeners. Exception: a sketchpad frame root selected
+    // while the sketchpad iframe itself holds focus. Keep focus there so the
+    // sketchpad's own frame-level shortcuts (Delete, Cmd+C/X/V on frames) keep
+    // working — its bridge forwards every key to the shell anyway.
+    const active = document.activeElement as HTMLElement | null;
+    const isFrameRoot = !!primaryEl.parentElement?.hasAttribute('data-sketchpad-frame');
+    const focusInOwnerIframe = active instanceof HTMLIFrameElement && active.contentDocument === primaryEl.ownerDocument;
+    if (!keepShellFocus && !(isFrameRoot && focusInOwnerIframe)) active?.blur?.();
+
     let t: HTMLElement | null = primaryEl;
     let matchedIds = new Set<string>();
     const docRoot = primaryEl.ownerDocument?.documentElement ?? document.documentElement;
@@ -292,7 +328,7 @@ export const ProtovibeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setSources(Array.from(matchedIds));
     }
 
-    const allIframes = Array.from(document.querySelectorAll('iframe')) as HTMLIFrameElement[];
+    const allIframes = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')) as HTMLIFrameElement[];
     const iframeEl = allIframes.find(f => f.contentDocument === primaryEl.ownerDocument) ?? null;
     iframeEl?.contentWindow?.postMessage({ type: 'PV_SET_SELECTION', runtimeIds }, '*');
 
@@ -305,7 +341,7 @@ export const ProtovibeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setActiveSourceId(null);
     setSources([]);
     // Clear outline in all iframes
-    (Array.from(document.querySelectorAll('iframe')) as HTMLIFrameElement[]).forEach(iframe => {
+    (Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')) as HTMLIFrameElement[]).forEach(iframe => {
       iframe.contentWindow?.postMessage({ type: 'PV_CLEAR_SELECTION' }, '*');
     });
   }, [setHighlightedElement]);
@@ -317,7 +353,7 @@ export const ProtovibeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     let attempts = 0;
 
     const findEl = (id: string): HTMLElement | null => {
-      const allIframes = Array.from(document.querySelectorAll('iframe')) as HTMLIFrameElement[];
+      const allIframes = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')) as HTMLIFrameElement[];
       for (const iframe of allIframes) {
         const t = iframe.contentDocument?.querySelector(`[data-pv-block="${id}"]`) as HTMLElement | null;
         if (t) return t;
@@ -396,6 +432,7 @@ export const ProtovibeProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       sourceDataList,
       activeData,
       isLoading,
+      isZonesLoading,
       refreshActiveData,
       toggleInspector,
       highlightedElement, setHighlightedElement,

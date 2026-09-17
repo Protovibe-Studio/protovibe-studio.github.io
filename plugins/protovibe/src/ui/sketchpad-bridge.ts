@@ -4,6 +4,7 @@
 // Supports selecting, dragging, and focusing them in the inspector.
 
 import { isTypingInput } from './utils/elementType';
+import { installCanvasLinkInterceptor } from './utils/canvasLinks';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 (function () {
@@ -143,6 +144,7 @@ function updateGhost(isAltHeld: boolean) {
       ghost.style.top = `${t.origOffsetTop}px`;
       ghost.style.width = `${t.origWidth}px`;
       ghost.style.height = `${t.origHeight}px`;
+      ghost.style.boxSizing = 'border-box';
       ghost.style.margin = '0';
       
       const stripIdentifiers = (el: Element) => {
@@ -1294,6 +1296,7 @@ function handlePointerDown(e: PointerEvent) {
   });
   const frameForDragSnap = findFrameContainer(nextTarget);
   const dragAllAbsolute = dragTargets.every(t => t.hasAttribute('data-pv-sketchpad-el'));
+  const zoom = getCanvasZoom();
   dragState = {
     pointerId: e.pointerId,
     startX: e.clientX,
@@ -1301,14 +1304,18 @@ function handlePointerDown(e: PointerEvent) {
     moved: false,
     targets: dragTargets.map(t => {
       const pos = getComputedPos(t);
+      // offsetWidth/offsetHeight are rounded to integers; a content-sized text
+      // element can be fractionally wider, so a ghost sized from them would be
+      // up to 1px narrower and re-wrap its last word. Use the exact rect.
+      const rect = t.getBoundingClientRect();
       return {
         el: t,
         origLeft: pos.left,
         origTop: pos.top,
         origOffsetLeft: t.offsetLeft,
         origOffsetTop: t.offsetTop,
-        origWidth: t.offsetWidth,
-        origHeight: t.offsetHeight,
+        origWidth: rect.width / zoom,
+        origHeight: rect.height / zoom,
         origZIndex: t.style.zIndex,
         isFlow: !t.hasAttribute('data-pv-sketchpad-el'),
         origTransform: t.style.transform
@@ -1875,6 +1882,11 @@ function init() {
   `;
   document.head.appendChild(scrollbarStyle);
 
+  // Frames render the same components as the app canvas, so their links get the
+  // same treatment — but navigating this document would tear down the sketchpad,
+  // so the shell opens the page in the app canvas instead.
+  installCanvasLinkInterceptor({ destination: 'shell' });
+
   document.addEventListener('pointerdown', handlePointerDown, true);
   document.addEventListener('pointermove', handlePointerMove, true);
   document.addEventListener('pointerup', handlePointerUp, true);
@@ -1907,8 +1919,8 @@ function init() {
   }) as EventListener);
 
   // Select a frame's root content div (the wrapper that has data-pv-loc-* but no
-  // data-pv-block). Used when a frame is selected via its title bar so the inspector
-  // shows the root, not the first child block.
+  // data-pv-block). Dispatched by SketchpadApp whenever a frame becomes the canvas
+  // selection so the inspector shows the root, not the first child block.
   window.addEventListener('pv-select-frame-root', ((e: CustomEvent<{ frameId?: string }>) => {
     const frameId = e.detail.frameId;
     if (!frameId) return;
@@ -1920,9 +1932,6 @@ function init() {
     clearSelection();
     setSelection(root, false);
     notifyInspector(root, true);
-    // Tell SketchpadApp we actually selected — used to one-shot suppress the
-    // PV_SET_SELECTION echo that would otherwise clear frame focus.
-    window.dispatchEvent(new CustomEvent('pv-frame-root-selected', { detail: { frameId } }));
   }) as EventListener);
 
   // Allow SketchpadApp to programmatically clear element selection (e.g. when frames are marquee-selected)

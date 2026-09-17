@@ -2436,6 +2436,136 @@ export const handleUploadImage: Connect.NextHandleFunction = (req, res) => {
   });
 };
 
+// ─── Prompt attachments ───────────────────────────────────────────────────────
+// Screenshots and files the user attaches in the Prompts tab. Nothing is ever
+// uploaded anywhere: the bytes are copied into a gitignored folder inside the
+// project so the copied prompt can point a coding agent at a real absolute path
+// on disk. Paths stay inside the project, so an agent running with the project
+// as its working directory can read them without extra permissions.
+const PROMPT_ATTACHMENTS_DIR = '.protovibe/prompts-attachments';
+
+// Base64 travels through the dev server in one request body, so cap the size.
+const MAX_PROMPT_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+// Attachments are disposable: once a copied prompt has been pasted into a
+// coding agent, the copy has done its job. Anything older than this is swept so
+// the folder can't grow without bound. Keep it comfortably longer than a work
+// session — a prompt copied on Friday must still resolve on Monday.
+const PROMPT_ATTACHMENT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// The sweep also runs opportunistically on save, so an editor left open for
+// weeks still gets cleaned. Throttled — it is a readdir + stat per file.
+const PROMPT_ATTACHMENT_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+let lastPromptAttachmentSweep = 0;
+
+// Create the attachments folder and make it ignore itself. A `.gitignore`
+// holding `*` inside the folder covers the folder's whole contents (including
+// the .gitignore), so projects generated from older templates need no edit to
+// their own root .gitignore.
+function ensurePromptAttachmentsDir(): string {
+  const dir = path.resolve(process.cwd(), PROMPT_ATTACHMENTS_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+  const ignoreFile = path.join(dir, '.gitignore');
+  if (!fs.existsSync(ignoreFile)) fs.writeFileSync(ignoreFile, '*\n');
+  return dir;
+}
+
+// Kebab-case the name, keep the extension, and suffix a counter until the name
+// is free — attaching the same screenshot twice keeps both copies.
+function uniquePromptAttachmentName(dir: string, filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  const sanitized = path.basename(filename, path.extname(filename))
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'attachment';
+  let finalName = `${sanitized}${ext}`;
+  let counter = 1;
+  while (fs.existsSync(path.join(dir, finalName))) {
+    finalName = `${sanitized}-${counter}${ext}`;
+    counter++;
+  }
+  return finalName;
+}
+
+/**
+ * Delete prompt attachments past the TTL.
+ *
+ * Never removes the folder's `.gitignore` — losing that would expose every
+ * future attachment to git. Never removes the folder itself either, so an
+ * in-flight save can't land in a directory that just disappeared.
+ *
+ * Deleting these files is invisible to Vite: they are not in the module graph,
+ * so no HMR update is broadcast and no editor state is lost.
+ */
+export function sweepPromptAttachments(force = false): void {
+  const now = Date.now();
+  if (!force && now - lastPromptAttachmentSweep < PROMPT_ATTACHMENT_SWEEP_INTERVAL_MS) return;
+  lastPromptAttachmentSweep = now;
+
+  const dir = path.resolve(process.cwd(), PROMPT_ATTACHMENTS_DIR);
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return; // Nothing attached yet.
+  }
+
+  let removed = 0;
+  for (const entry of entries) {
+    if (!entry.isFile() || entry.name === '.gitignore') continue;
+    const file = path.join(dir, entry.name);
+    try {
+      if (now - fs.statSync(file).mtimeMs < PROMPT_ATTACHMENT_TTL_MS) continue;
+      fs.unlinkSync(file);
+      removed++;
+    } catch {
+      // Raced with another sweep or a manual delete — nothing to do.
+    }
+  }
+  if (removed > 0) {
+    console.log(`[protovibe] Removed ${removed} prompt attachment(s) older than 7 days`);
+  }
+}
+
+// POST { filename, base64Data } → { ok, name, absolutePath }
+// Deliberately not image-only and deliberately uncompressed: a screenshot the
+// agent is asked to read should stay pixel-exact.
+export const handleSavePromptAttachment: Connect.NextHandleFunction = (req, res) => {
+  let body = '';
+  req.on('data', chunk => { body += chunk; });
+  req.on('end', () => {
+    res.setHeader('Content-Type', 'application/json');
+    try {
+      const { filename, base64Data } = JSON.parse(body);
+      if (!filename || !base64Data) {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ ok: false, error: 'Missing filename or base64Data' }));
+      }
+      const raw = String(base64Data).replace(/^data:[^;,]*;base64,/, '');
+      const buffer = Buffer.from(raw, 'base64');
+      if (buffer.length === 0) {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ ok: false, error: 'File is empty' }));
+      }
+      if (buffer.length > MAX_PROMPT_ATTACHMENT_BYTES) {
+        res.statusCode = 413;
+        return res.end(JSON.stringify({ ok: false, error: 'File is larger than 20 MB' }));
+      }
+      sweepPromptAttachments();
+      const dir = ensurePromptAttachmentsDir();
+      const name = uniquePromptAttachmentName(dir, filename);
+      const absolutePath = path.join(dir, name);
+      fs.writeFileSync(absolutePath, buffer);
+      res.end(JSON.stringify({ ok: true, name, absolutePath }));
+    } catch (err) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ ok: false, error: String(err) }));
+    }
+  });
+};
+
 export const handleUpdateThemeToken: Connect.NextHandleFunction = (req, res) => {
   let body = '';
   req.on('data', chunk => { body += chunk; });
@@ -2591,6 +2721,198 @@ function readPublishMeta(): Record<string, any> {
 
 function writePublishMeta(data: Record<string, any>): void {
   fs.writeFileSync(PUBLISH_META_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8');
+}
+
+// ─── Per-user publish state ───────────────────────────────────────────────────
+// Where a deploy landed — the live URL, when it was last published, and the
+// per-deploy version history — used to live in protovibe-data.json, which is
+// committed. Every user publishes to their own Cloudflare account, so those
+// values are personal: travelling through git, they made teammates overwrite
+// each other's links and surface URLs they cannot even reach. They now live in
+// .protovibe-local-data/, a hidden folder that is gitignored whole, so anything
+// else that turns out to be per-user has somewhere to go. The legacy keys are
+// migrated out of protovibe-data.json on read — see migrateLegacyPublishState.
+
+const LOCAL_DATA_DIR_NAME = '.protovibe-local-data';
+const LOCAL_DATA_DIR = path.resolve(process.cwd(), LOCAL_DATA_DIR_NAME);
+const PUBLISH_HISTORY_PATH = path.join(LOCAL_DATA_DIR, 'publish-history.json');
+
+/** Keys that used to carry per-user publish state inside protovibe-data.json. */
+const LEGACY_PUBLISH_KEYS = [
+  'cloudflare-pages-url',
+  'cloudflare-last-published-at',
+  'cloudflare-deploy-history',
+] as const;
+
+/**
+ * A short-lived intermediate layout that kept the same state in a single
+ * top-level file, before it moved into the folder. Absorbed and deleted like
+ * any other legacy source; safe to drop once no project can still have one.
+ */
+const LEGACY_LOCAL_FILE_PATH = path.resolve(process.cwd(), 'protovibe-local.json');
+
+/** How many previous deploy URLs the version history keeps. */
+const MAX_DEPLOY_HISTORY = 20;
+
+interface CfLocalPublishState {
+  url: string;
+  lastPublishedAt: string;
+  deployHistory: CfDeployHistoryEntry[];
+}
+
+function readJsonFile(filePath: string): Record<string, any> {
+  if (!fs.existsSync(filePath)) return {};
+  try { return JSON.parse(fs.readFileSync(filePath, 'utf-8')); } catch { return {}; }
+}
+
+function writePublishHistoryFile(data: Record<string, any>): void {
+  fs.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
+  fs.writeFileSync(PUBLISH_HISTORY_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8');
+}
+
+/** Reads the publish-state keys out of any of the files — all use the same names. */
+function toPublishState(raw: Record<string, any>): CfLocalPublishState {
+  return {
+    url: typeof raw['cloudflare-pages-url'] === 'string' ? raw['cloudflare-pages-url'] : '',
+    lastPublishedAt: typeof raw['cloudflare-last-published-at'] === 'string' ? raw['cloudflare-last-published-at'] : '',
+    deployHistory: normalizeDeployHistory(raw['cloudflare-deploy-history']),
+  };
+}
+
+function hasPublishState(state: CfLocalPublishState): boolean {
+  return !!state.url || !!state.lastPublishedAt || state.deployHistory.length > 0;
+}
+
+/**
+ * Union of two histories, deduped by URL: everything the user already has
+ * locally, then anything a legacy source still carried that is missing from it.
+ * Both lists are newest-first, and on the migration that matters one of them is
+ * empty, so the order is simply preserved.
+ */
+function mergeDeployHistory(local: CfDeployHistoryEntry[], legacy: CfDeployHistoryEntry[]): CfDeployHistoryEntry[] {
+  const merged: CfDeployHistoryEntry[] = [];
+  const seen = new Set<string>();
+  for (const entry of [...local, ...legacy]) {
+    if (seen.has(entry.url)) continue;
+    seen.add(entry.url);
+    merged.push(entry);
+  }
+  return merged.slice(0, MAX_DEPLOY_HISTORY);
+}
+
+/**
+ * Moves publish state out of the committed protovibe-data.json (and out of the
+ * older single-file layout) into .protovibe-local-data/publish-history.json, so
+ * nobody loses the history they had before this split.
+ *
+ * Deliberately not guarded by a run-once flag: a pull can bring the legacy keys
+ * back at any time — a teammate still on an older plugin, or a merge that
+ * resurrects an old commit — so this runs on every read and absorbs whatever it
+ * finds. Values already in the local folder win, since they are this user's own
+ * and the committed ones may well be someone else's; history entries are merged
+ * rather than replaced so neither side is dropped.
+ */
+function migrateLegacyPublishState(): void {
+  const meta = readPublishMeta();
+  const staleKeys = LEGACY_PUBLISH_KEYS.filter((key) => key in meta);
+  const legacyFileExists = fs.existsSync(LEGACY_LOCAL_FILE_PATH);
+  if (staleKeys.length === 0 && !legacyFileExists) return;
+
+  // Newest legacy source first: the single-file layout is this user's own
+  // state, while the committed keys may well be a teammate's.
+  const legacySources = [
+    ...(legacyFileExists ? [toPublishState(readJsonFile(LEGACY_LOCAL_FILE_PATH))] : []),
+    toPublishState(meta),
+  ];
+
+  // Empty keys (a project created but never published) carry nothing to keep —
+  // the legacy sources just get cleaned up below.
+  if (legacySources.some(hasPublishState)) {
+    const local = readJsonFile(PUBLISH_HISTORY_PATH);
+    let merged = toPublishState(local);
+    for (const legacy of legacySources) {
+      merged = {
+        url: merged.url || legacy.url,
+        lastPublishedAt: merged.lastPublishedAt || legacy.lastPublishedAt,
+        deployHistory: mergeDeployHistory(merged.deployHistory, legacy.deployHistory),
+      };
+    }
+    local['cloudflare-pages-url'] = merged.url;
+    local['cloudflare-last-published-at'] = merged.lastPublishedAt;
+    local['cloudflare-deploy-history'] = merged.deployHistory;
+    try {
+      writePublishHistoryFile(local);
+    } catch (err) {
+      // The legacy sources are still intact, so the next read retries the whole
+      // migration. Bail out rather than remove values that went nowhere.
+      cfLog(`Failed to migrate publish state into ${LOCAL_DATA_DIR_NAME}:`, err);
+      return;
+    }
+    cfLog(`Migrated publish state into ${LOCAL_DATA_DIR_NAME}/publish-history.json.`);
+  }
+
+  if (legacyFileExists) {
+    try { fs.rmSync(LEGACY_LOCAL_FILE_PATH, { force: true }); } catch (err) {
+      cfLog('Failed to remove the superseded protovibe-local.json:', err);
+    }
+  }
+  if (staleKeys.length > 0) {
+    for (const key of staleKeys) delete meta[key];
+    try { writePublishMeta(meta); } catch (err) {
+      cfLog('Failed to strip legacy publish keys from protovibe-data.json:', err);
+    }
+  }
+}
+
+/** This user's publish state, migrating any legacy leftovers on the way. */
+function readPublishState(): CfLocalPublishState {
+  migrateLegacyPublishState();
+  return toPublishState(readJsonFile(PUBLISH_HISTORY_PATH));
+}
+
+function writePublishState(state: CfLocalPublishState): void {
+  const local = readJsonFile(PUBLISH_HISTORY_PATH);
+  local['cloudflare-pages-url'] = state.url;
+  local['cloudflare-last-published-at'] = state.lastPublishedAt;
+  local['cloudflare-deploy-history'] = state.deployHistory;
+  writePublishHistoryFile(local);
+}
+
+/**
+ * Keeps the local-data folder out of git for projects created before it
+ * existed. A project's .gitignore is copied from the template when the project
+ * is created and never re-synced — plugin updates only touch plugins/protovibe
+ * — so the entry has to be added in place.
+ */
+function ensureLocalDataGitignored(): void {
+  const gitignorePath = path.resolve(process.cwd(), '.gitignore');
+  let contents = '';
+  try { contents = fs.readFileSync(gitignorePath, 'utf-8'); } catch { contents = ''; }
+  // Tolerate the equivalent spellings: a leading slash and a trailing slash
+  // both ignore the same folder.
+  const alreadyIgnored = contents
+    .split('\n')
+    .some((line) => line.trim().replace(/^\//, '').replace(/\/$/, '') === LOCAL_DATA_DIR_NAME);
+  if (alreadyIgnored) return;
+  const separator = contents.length === 0 || contents.endsWith('\n') ? '' : '\n';
+  try {
+    fs.appendFileSync(
+      gitignorePath,
+      `${separator}# Per-user local data (Cloudflare publish links + version history) — never commit\n${LOCAL_DATA_DIR_NAME}/\n`,
+      'utf-8',
+    );
+  } catch (err) {
+    cfLog(`Could not add ${LOCAL_DATA_DIR_NAME}/ to .gitignore:`, err);
+  }
+}
+
+/**
+ * Called once when the dev server boots, so a project that is opened but never
+ * published still gets its committed publish state moved out of git.
+ */
+export function initPublishState(): void {
+  ensureLocalDataGitignored();
+  migrateLegacyPublishState();
 }
 
 
@@ -2916,17 +3238,15 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
       if (actualProject) canonicalUrl = `https://${actualProject}.pages.dev`;
     }
 
-    const meta = readPublishMeta();
     const publishedAt = new Date().toISOString();
-    meta['cloudflare-pages-url'] = canonicalUrl;
-    meta['cloudflare-last-published-at'] = publishedAt;
-    const history = normalizeDeployHistory(meta['cloudflare-deploy-history']);
-    if (hashedUrl && hashedUrl !== canonicalUrl && !history.some((h) => h.url === hashedUrl)) {
-      history.unshift({ url: hashedUrl, publishedAt });
-      if (history.length > 20) history.pop();
+    const state = readPublishState();
+    state.url = canonicalUrl;
+    state.lastPublishedAt = publishedAt;
+    if (hashedUrl && hashedUrl !== canonicalUrl && !state.deployHistory.some((h) => h.url === hashedUrl)) {
+      state.deployHistory.unshift({ url: hashedUrl, publishedAt });
+      if (state.deployHistory.length > MAX_DEPLOY_HISTORY) state.deployHistory.pop();
     }
-    meta['cloudflare-deploy-history'] = history;
-    writePublishMeta(meta);
+    writePublishState(state);
 
     setCfState({ status: 'success', message: 'Deployed successfully!', url: canonicalUrl });
   } catch (err) {
@@ -2936,13 +3256,16 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
 
 export const handleCloudflarePublishMetadata: Connect.NextHandleFunction = (_req, res) => {
   try {
+    // Reads the local file first: the migration it runs can rewrite
+    // protovibe-data.json, so the project name is read afterwards.
+    const state = readPublishState();
     const pkg = readPublishMeta();
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({
       projectName: pkg['cloudflare-wrangler-project-name'] ?? '',
-      url: pkg['cloudflare-pages-url'] ?? '',
-      lastPublishedAt: pkg['cloudflare-last-published-at'] ?? '',
-      deployHistory: normalizeDeployHistory(pkg['cloudflare-deploy-history']),
+      url: state.url,
+      lastPublishedAt: state.lastPublishedAt,
+      deployHistory: state.deployHistory,
     }));
   } catch (err) {
     res.statusCode = 500;

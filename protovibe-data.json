@@ -1,8 +1,6 @@
 {
   "project-name": "protovibe-landing-page",
   "cloudflare-wrangler-project-name": "protovibe-landing-page",
-  "cloudflare-pages-url": "",
-  "cloudflare-deploy-history": [],
-  "plugin-version": "1.0.71",
-  "plugin-last-updated": "2026-07-17"
+  "plugin-version": "1.0.85",
+  "plugin-last-updated": "2026-09-17"
 }

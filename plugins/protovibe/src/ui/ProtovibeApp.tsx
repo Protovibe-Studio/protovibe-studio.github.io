@@ -7,6 +7,7 @@ import { ShellNavBar, IframeTab, SidebarTab } from './components/ShellNavBar';
 import { TokensTab } from './components/TokensTab';
 import { PromptsTab } from './components/PromptsTab';
 import { CommentsTab } from './components/CommentsTab';
+import { SpecsTab, PV_CANVAS_NAVIGATE_EVENT, PV_SPECS_REFRESH_EVENT } from './components/SpecsTab';
 import { Sidebar } from './components/Sidebar';
 import { ElementsPanel } from './components/ElementsPanel';
 import { FloatingToolbar } from './components/FloatingToolbar';
@@ -27,6 +28,7 @@ import { openInBrowser, handleExternalLinkClick } from './utils/openExternal';
 import { commentIdSelector } from '../shared/comments';
 import type { CommentContext } from '../shared/comments';
 import { consumePersistedAppPath, persistAppPath, setCurrentAppPath, getCurrentAppPath } from './utils/appPath';
+import { PV_OPEN_IN_CANVAS } from './utils/canvasLinks';
 
 // A Vite crash is often a transient state while an AI agent edits code, so the
 // shell runs each crash as an "episode" behind a loading cover instead of
@@ -322,21 +324,32 @@ export const ProtovibeApp: React.FC = () => {
     return () => window.removeEventListener('pv-open-component-preview', handler);
   }, [handleIframeTabChange]);
 
-  // Bring a comment's anchored element into view. Retries across iframes because
-  // the element may only appear after a tab switch or an app-iframe navigation.
-  const focusThreadElement = useCallback((threadId: string) => {
-    // Each thread anchors its element via its own `data-pv-comment-{id}` attribute.
-    const sel = commentIdSelector(threadId);
+  // Reload every canvas iframe (e.g. after a font-family change, whose webfont
+  // <link>s are only injected when the page is served).
+  useEffect(() => {
+    const handler = () => {
+      reloadIframe(appIframeRef);
+      reloadIframe(sketchpadIframeRef);
+      reloadIframe(componentsIframeRef);
+    };
+    window.addEventListener('pv-reload-canvases', handler);
+    return () => window.removeEventListener('pv-reload-canvases', handler);
+  }, [reloadIframe]);
+
+  // Bring an anchored element (a comment thread's or a spec annotation's) into
+  // view by CSS selector. Retries across iframes because the element may only
+  // appear after a tab switch or an app-iframe navigation.
+  const focusCanvasElement = useCallback((sel: string, keepShellFocus = false) => {
     let attempts = 0;
     const tryFind = () => {
       let el: HTMLElement | null = null;
-      for (const iframe of Array.from(document.querySelectorAll('iframe')) as HTMLIFrameElement[]) {
+      for (const iframe of Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')) as HTMLIFrameElement[]) {
         el = (iframe.contentDocument?.querySelector(sel) as HTMLElement | null) ?? null;
         if (el) break;
       }
       if (!el) el = document.querySelector(sel) as HTMLElement | null;
       if (el) {
-        focusElement(el, true);
+        focusElement(el, true, keepShellFocus);
         try { el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); } catch {}
         return;
       }
@@ -374,7 +387,7 @@ export const ProtovibeApp: React.FC = () => {
             '*',
           );
         }
-        focusThreadElement(threadId);
+        focusCanvasElement(commentIdSelector(threadId));
         return;
       }
 
@@ -394,11 +407,35 @@ export const ProtovibeApp: React.FC = () => {
           win.location.href = targetPath;
         }
       }
-      focusThreadElement(threadId);
+      focusCanvasElement(commentIdSelector(threadId));
     };
     window.addEventListener('pv-comment-navigate', handler);
     return () => window.removeEventListener('pv-comment-navigate', handler);
-  }, [handleIframeTabChange, focusThreadElement]);
+  }, [handleIframeTabChange, focusCanvasElement]);
+
+  // The specs panel asks us to show an annotation's state: navigate the app
+  // iframe to the saved path when it differs, then select the pinned element.
+  // `keepFocus` is set when the click came from the annotation's text editor,
+  // so selecting the element must not blur (and close) that editor.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { path, selector, keepFocus } = (e as CustomEvent<{ path?: string; selector?: string; keepFocus?: boolean }>).detail || {};
+      if (!path || !path.startsWith('/') || path.startsWith('//')) return;
+      handleIframeTabChange('app');
+      const win = appIframeRef.current?.contentWindow;
+      if (win) {
+        try {
+          const current = win.location.pathname + win.location.search + win.location.hash;
+          if (current !== path) win.location.href = path;
+        } catch {
+          win.location.href = path;
+        }
+      }
+      if (selector) focusCanvasElement(selector, !!keepFocus);
+    };
+    window.addEventListener(PV_CANVAS_NAVIGATE_EVENT, handler);
+    return () => window.removeEventListener(PV_CANVAS_NAVIGATE_EVENT, handler);
+  }, [handleIframeTabChange, focusCanvasElement]);
 
   // Forward zoom shortcuts to the sketchpad iframe when it's the active tab
   useEffect(() => {
@@ -516,12 +553,13 @@ export const ProtovibeApp: React.FC = () => {
           window.history.pushState({}, '', res.currentURLQueryString);
           window.dispatchEvent(new PopStateEvent('popstate'));
         }
-        Array.from(document.querySelectorAll('iframe')).forEach((iframe) => {
+        Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe:not([data-pv-thumbnail])')).forEach((iframe) => {
           iframe.contentWindow?.postMessage({ type: 'PV_UNDO_REDO_COMPLETE' }, '*');
         });
         // Keep the comments panel in sync — an undone thread/reply must drop out
         // of the list (and out of any open thread view).
         window.dispatchEvent(new CustomEvent('pv-comments-refresh'));
+        window.dispatchEvent(new CustomEvent(PV_SPECS_REFRESH_EVENT));
         emitToast({ message: formatUndoRedoMessage('Undo', res), variant: 'info', durationMs: 1600 });
       } else {
         emitToast({ message: 'Nothing to undo', variant: 'error', durationMs: 800 });
@@ -550,6 +588,23 @@ export const ProtovibeApp: React.FC = () => {
       console.error('Restart failed', e);
     }
   };
+
+  // A link clicked inside the sketchpad or the components preview: those
+  // documents host prototype components but aren't the prototype, so they hand
+  // the page over here instead of navigating themselves out of existence.
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type !== PV_OPEN_IN_CANVAS) return;
+      const path = typeof e.data.path === 'string' ? e.data.path : '';
+      if (!path.startsWith('/')) return;
+      handleIframeTabChange('app');
+      const win = appIframeRef.current?.contentWindow;
+      if (win) win.location.href = path;
+      persistAppPath(path);
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [handleIframeTabChange]);
 
   // Track app iframe URL changes (client-side navigation via postMessage)
   useEffect(() => {
@@ -654,13 +709,18 @@ export const ProtovibeApp: React.FC = () => {
         </div>
       )}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
-        {elementsPanelOpen && (
-          <ElementsPanel
-            activeIframeTab={activeIframeTab}
-            iframeRef={activeIframeRef}
-          />
-        )}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+          {/* Row holding the elements panel next to the canvas. The panel only
+              squeezes the iframe here — the bottom bar below spans full width. */}
+          <div style={{ flex: 1, display: 'flex', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+            {elementsPanelOpen && (
+              <ElementsPanel
+                activeIframeTab={activeIframeTab}
+                iframeRef={activeIframeRef}
+                onClose={toggleElementsPanel}
+              />
+            )}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
           <div style={{ flex: 1, display: activeIframeTab === 'app' ? 'flex' : 'none', minHeight: 0, flexDirection: 'column' }}>
             <div
               style={{
@@ -819,6 +879,8 @@ export const ProtovibeApp: React.FC = () => {
               onLoad={() => handleIframeLoad(componentsIframeRef)}
             />
             {renderCrashCover(componentsIframeRef)}
+          </div>
+            </div>
           </div>
           <div
             style={{
@@ -1051,6 +1113,20 @@ export const ProtovibeApp: React.FC = () => {
             }}
           >
             <CommentsTab activeIframeTab={activeIframeTab} isActive={activeSidebarTab === 'comments'} />
+          </div>
+        )}
+
+        {inspectorOpen && (
+          <div
+            style={{
+              width: `${INSPECTOR_WIDTH_PX}px`,
+              flexShrink: 0,
+              borderLeft: `1px solid ${theme.border_default}`,
+              overflow: 'hidden',
+              display: activeSidebarTab === 'specs' ? 'flex' : 'none',
+            }}
+          >
+            <SpecsTab activeIframeTab={activeIframeTab} isActive={activeSidebarTab === 'specs'} />
           </div>
         )}
 

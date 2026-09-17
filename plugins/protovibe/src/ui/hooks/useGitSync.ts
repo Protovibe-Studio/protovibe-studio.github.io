@@ -17,6 +17,7 @@ import {
   type GithubRepoAccess,
 } from '../api/client';
 import { emitToast } from '../events/toast';
+import { openGitMenu } from '../events/gitMenu';
 import { openLocalWindow } from '../utils/openExternal';
 
 const POLL_INTERVAL_MS = 120_000; // background remote check — every 2 minutes
@@ -206,9 +207,16 @@ export function useGitSync(): UseGitSync {
         // Comments tab to re-read them so the list updates without a page reload.
         if (opName === 'sync' || opName === 'pull') {
           window.dispatchEvent(new CustomEvent('pv-comments-refresh'));
+          window.dispatchEvent(new CustomEvent('pv-specs-refresh'));
         }
-      } else if (latest.status === 'error' && !latest.needsInstall) {
-        emitToast({ variant: 'error', message: latest.error || latest.message || 'Git operation failed', durationMs: 6000 });
+      } else if (latest.status === 'error') {
+        if (!latest.needsInstall) {
+          emitToast({ variant: 'error', message: latest.message || 'Git operation failed', durationMs: 6000 });
+        }
+        // The menu is where we explain what to do about it. A sync started from
+        // the banner (or a keyboard shortcut) would otherwise leave the user with
+        // a toast and no way forward, so surface the guidance every time.
+        openGitMenu();
       }
 
       await refresh(false);
@@ -219,8 +227,9 @@ export function useGitSync(): UseGitSync {
         setTimeout(() => { if (mounted.current) setOp(IDLE_OP); }, 4000);
       }
     } catch (err) {
-      emitToast({ variant: 'error', message: err instanceof Error ? err.message : String(err), durationMs: 6000 });
-      setOp({ status: 'error', message: 'Failed to start', op: opName, error: String(err) });
+      emitToast({ variant: 'error', message: 'Couldn’t start syncing.', durationMs: 6000 });
+      setOp({ status: 'error', message: 'Couldn’t start syncing.', op: opName, error: String(err) });
+      openGitMenu();
     } finally {
       opRunning.current = false;
     }

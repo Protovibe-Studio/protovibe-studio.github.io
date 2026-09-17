@@ -12,12 +12,19 @@
 //   {{blockId}}     — nearest `data-pv-block` id to the current selection
 //   {{code}}        — source code of the currently selected block
 //   {{agentsRules}} — standard reminder to follow plugins/protovibe/PROTOVIBE_AGENTS.md rules
+//                     (every prompt gets this — if a template omits the
+//                      placeholder, it is appended at the end automatically)
+//   {{attachments}} — absolute paths of the files attached in the Prompts tab.
+//                     Same deal: templates do NOT need this placeholder. When
+//                     attachments exist and a template omits it, the block is
+//                     appended after the rules reminder.
 //
 // When a reference is missing (e.g. no selection), the placeholder is
 // replaced with a readable fallback like "(no file selected)".
 
 import type { LucideIcon } from 'lucide-react';
 import {
+  AtSign,
   LayoutTemplate,
   Wand,
   Rocket,
@@ -29,6 +36,7 @@ import {
   Palette,
   MousePointerClick,
   Pipette,
+  Link2,
 } from 'lucide-react';
 
 export type PromptFieldRef =
@@ -66,11 +74,20 @@ export interface PromptDef {
    */
   inputOptional?: boolean;
   /**
+   * Text substituted for {{input}} when the user leaves the textarea empty.
+   * Only meaningful together with `inputOptional`. Defaults to a readable
+   * "(no extra instructions)" note; set it to '' for prompts that should
+   * render as a bare payload when nothing is typed.
+   */
+  emptyInputFallback?: string;
+  /**
    * Final prompt template. Supports the placeholders listed at the top of
    * this file. Indentation inside the backticks is preserved verbatim.
    */
   template: string;
 }
+
+const ATTACHMENTS_HEADING = 'See these screenshots or files:';
 
 const AGENTS_RULES_SUFFIX =
   'Follow all architectural rules from plugins/protovibe/PROTOVIBE_AGENTS.md — especially the pv-zone/pv-block ID conventions, component reuse, semantic color tokens, and static Tailwind class strings. Do not invent new patterns.';
@@ -95,6 +112,57 @@ export const PROMPTS: PromptDef[] = [
   2. This app uses querystring-based routing (e.g. \`?view=xxx\`). Add the new route by following the existing pattern exactly — do NOT introduce react-router or any other routing library. Consider using queryStrings for dialogs also (separate key for each dialog like employeeDialog=true (so that visible dialog layer gets it's own key set to true, but don't set the key to false for non visible dialogs, just remove the key from URL).
   3. Browse \`src/components/ui/\` and reuse existing components wherever possible. Only write custom HTML/Tailwind when no existing component fits the need.
   4. Use mock data held in React state (e.g. \`useState\` with a seeded default). The data should persist while navigating within the app but reset on full page refresh — do not write to localStorage, files, or any backend.
+  
+  {{agentsRules}}`,
+  },
+  {
+    id: 'deep-link-states',
+    title: 'Make states deep-linkable',
+    description: 'Expose every UI state — dialogs, expanded sections, selections, dropdowns — as query-string URL parameters you can share.',
+    icon: Link2,
+    inputLabel: 'Make states deep-linkable in…',
+    inputPlaceholder: 'the whole prototype — or name one flow, e.g. the employee onboarding flow',
+    requiresSelection: false,
+    inputOptional: true,
+    emptyInputFallback: '(scope not specified — ask me first)',
+    references: [],
+    template: `Scope from the user:
+  {{input}}
+  
+  I'm a designer and this is a prototype. I want any state of it to be reachable from a URL — a dialog already open, a section expanded, a specific option selected in a dropdown or radio group, a dropdown open, a conditional element already revealed, or a screen sitting in its loading, empty or error state. Make every one of those states deep-linkable through the URL query string, so each one can later be pinned as a state in Protovibe Specs and annotations and handed to developers.
+  
+  FIRST, before writing any code:
+  - If the scope above does not clearly say WHERE to apply this, ASK ME whether you should do it across the whole prototype or only in one selected flow/view — and wait for my answer. Do not guess.
+  - Read the "Adding Interaction" and "Deep-linkable UI state" sections of plugins/protovibe/PROTOVIBE_AGENTS.md.
+  - Read \`src/store.tsx\` to see how \`state.queryParams\` and \`setQueryParams\` work, and read an existing page that already uses them so you follow the established pattern exactly. Do NOT introduce react-router or any other routing library, and do not invent a new state container.
+  
+  Then convert the UI state in scope from \`useState\` to the query string:
+  1. Inventory every representable state first, then work through it. Walk the files in scope and cover each one: dialogs/drawers/sheets (open or closed), expandable/collapsible sections and accordions, tabs and sub-tabs, selected rows/cards/items, form control values (select, dropdown, radio, checkbox, toggle, segmented control), open/closed dropdown and popover menus, and anything rendered conditionally on another state. Include the states that are normally invisible or fleeting, because those are exactly the ones that are hard to demo otherwise: loading/skeleton states, empty states, error states, success confirmations, and transient UI like a visible toast or an inline "Saved" flash. If a state can be described, it should be reachable from a URL.
+  2. Give each state its own query key, in camelCase, named after the thing it controls and scoped by its owner so keys can never collide across views (e.g. \`employeeDialog\`, \`employeeDialogTab\`, \`employeeDialogAddressSection\`, \`billingPlan\`).
+  3. Derive the value from \`state.queryParams\` — never from \`useState\` — and always validate it against the allowed values, falling back to the default when the param is missing or invalid. A junk value in a shared link must render the default, not a broken screen.
+  4. Write values with \`setQueryParams\`. Booleans use the string \`'true'\` when on and \`null\` (key removed) when off — never \`false\`. Enumerated values (tab, selected option, selected id) store the value itself.
+  5. Keep clean URLs: only non-default values appear. Drop the key whenever the state returns to its default, so a bare URL always means "default state".
+  6. Decide, per param, whether the change belongs in browser history. A param can be deep-linkable without adding a history entry:
+     - Push a history entry for navigational changes the user would expect the Back button to undo — opening a dialog, switching a view or tab, selecting a record.
+     - Replace the current entry (\`history.replaceState\`) for transient or incidental params — a toast being shown, a loading/error state being simulated, an open dropdown, a scroll or hover-driven flag, a filter being retyped — so the URL still describes the screen and is still shareable, but the user does not have to press Back ten times to escape.
+     - \`setQueryParams\` in \`src/store.tsx\` currently always pushes. Extend it with an optional replace mode (e.g. \`setQueryParams(updates, { replace: true })\`) following its existing structure — same param-diffing, same \`PV_URL_CHANGE\` postMessage to the parent frame, only \`pushState\` swapped for \`replaceState\` — and keep the default behaviour unchanged so existing call sites are unaffected.
+  
+  Preventing stale params — this is the part that usually goes wrong:
+  - Model the params as a tree: a dialog's params (its tab, its expanded sections, its dropdown selections, its open menus) are CHILDREN of the dialog's own param.
+  - When a parent closes or is deselected, remove the parent key AND every descendant key in the SAME \`setQueryParams\` call, so no intermediate URL ever exists. Example: closing \`employeeDialog\` must also null out \`employeeDialogTab\`, \`employeeDialogAddressSection\`, and any other key that only makes sense while that dialog is open.
+  - Because of that, reopening the dialog starts fresh at its defaults — a section the user expanded last time must NOT come back expanded.
+  - The same applies when the selected entity changes (switching to a different record clears that record's per-record sub-state) and when navigating to another view (view-scoped keys are cleared).
+  - Centralise this: define the owned child keys for each parent once (e.g. a small constant listing them) and have one close/reset helper clear them, rather than repeating null-ing lists at every call site where it is easy to forget one.
+  - Transient states belong in the URL too — a loading flag, a visible toast, an error banner or an open menu is a state I need to be able to link to. Put them in the query string like everything else, just use the replace mode from step 6 so they do not clog history, and make sure they are cleaned up on the same rules as everything else: a simulated loading or error param must be dropped when the screen leaves that state, and a toast param must be dropped when the toast is dismissed or auto-hides, so a stale link never shows a toast that can never go away.
+  - The only things to leave out are values that cannot survive a URL: secrets, and anything too large to sit in a query string (raw file contents, large blobs). If you leave something out, say which and why.
+  
+  Also make sure that:
+  - Browser back/forward works and feels sane — every state change goes through \`setQueryParams\`, and the push/replace choice from step 6 keeps Back meaningful instead of stepping through every transient flicker.
+  - Every param survives a reload and a fresh paste of the URL into a new tab, including the loading, error and toast ones — state is read from the query string on mount, not just written to it.
+  - Compound components (Tabs, RadioGroup, Select) keep using their context-driven API — feed them the value derived from the query param and write the new value back in their change handler. Do not hand-wire selected props onto individual children.
+  - Existing behaviour and visuals are unchanged; this is a state-plumbing refactor, not a redesign.
+  
+  Do not finish by compiling a list of example links for me — just make the states deep-linkable in the code. I will capture the ones I need by navigating the prototype and pinning them as states in Protovibe Specs and annotations, which is exactly why the URL has to describe the screen completely and never carry a stale param.
   
   {{agentsRules}}`,
   },
@@ -145,6 +213,32 @@ export const PROMPTS: PromptDef[] = [
   - Reuse existing components from \`@/components/ui/\` wherever possible.
   - Everything should be editable in Protovibe - add supergranular pv-block and pv-editable-zone tags if needed
   
+  {{agentsRules}}`,
+  },
+  {
+    id: 'reference-element',
+    title: 'Reference element',
+    description: 'Copy the references to the selected element — file, line range, block id, and source — plus any instructions you want to add.',
+    icon: AtSign,
+    inputLabel: 'Additional instructions (optional)…',
+    inputPlaceholder: 'tighten the spacing between the avatar and the name',
+    inputOptional: true,
+    emptyInputFallback: '(none — this is just a reference to the element)',
+    references: ['file', 'blockId', 'lineRange', 'code'],
+    template: `Here is the element I'm referring to:
+
+  File: \`{{file}}\`
+  Lines: {{startLine}}–{{endLine}}
+  Protovibe block id: {{blockId}}
+
+  Source:
+  \`\`\`tsx
+  {{code}}
+  \`\`\`
+
+  Additional instructions:
+  {{input}}
+
   {{agentsRules}}`,
   },
   {
@@ -412,7 +506,9 @@ export const PROMPTS: PromptDef[] = [
   - Use the exact color value the user provided. Do not convert it to another format.
   - When changing a base color (e.g. \`--background-primary\`), update its \`-hover\`, \`-pressed\`, \`-subtle\`, \`-subtle-hover\`, and \`-subtle-pressed\` variants proportionally: hover = base lightness +5–8%, pressed = base lightness −10–15%, subtle = very high lightness low chroma version of the hue.
   - If the user provides a specific color value without mentioning which theme it targets, assume it is for **light mode**. Derive a matching dark-mode equivalent automatically (typically: invert the lightness curve — light-mode light backgrounds become dark-mode dark backgrounds, and vice versa — while preserving chroma and hue). Then **inform the user** at the start of your response that you assumed light mode for the provided value and auto-generated the dark-mode counterpart, and show both values so they can adjust if needed.
-  - If the user explicitly mentions only one theme, apply changes only to that theme and leave the other untouched.`,
+  - If the user explicitly mentions only one theme, apply changes only to that theme and leave the other untouched.
+  
+  {{agentsRules}}`,
   }
 ];
 
@@ -429,21 +525,49 @@ function fallback(value: string | number | null, label: string): string {
   return String(value);
 }
 
+/**
+ * The block that points the coding agent at the attached files. Empty when
+ * nothing is attached, so prompts render exactly as before.
+ */
+function renderAttachments(absolutePaths: string[]): string {
+  if (absolutePaths.length === 0) return '';
+  return `${ATTACHMENTS_HEADING}\n${absolutePaths.map(p => `- ${p}`).join('\n')}`;
+}
+
 export function renderPrompt(
   def: PromptDef,
   ctx: PromptRenderContext,
   userInput: string,
+  attachments: string[] = [],
 ): string {
+  const attachmentBlock = renderAttachments(attachments);
   const map: Record<string, string> = {
-    input: userInput.trim() || (def.inputOptional ? '(no extra instructions)' : '(user input missing)'),
+    input:
+      userInput.trim() ||
+      (def.inputOptional
+        ? def.emptyInputFallback ?? '(no extra instructions)'
+        : '(user input missing)'),
     file: fallback(ctx.file, 'file selected'),
     startLine: fallback(ctx.startLine, 'start line'),
     endLine: fallback(ctx.endLine, 'end line'),
     blockId: fallback(ctx.blockId, 'block id'),
     code: ctx.code?.trim() || '(no code captured)',
     agentsRules: AGENTS_RULES_SUFFIX,
+    attachments: attachmentBlock,
   };
-  return def.template.replace(/\{\{(\w+)\}\}/g, (_, key) =>
-    key in map ? map[key] : `{{${key}}}`,
-  );
+  const rendered = def.template
+    .replace(/\{\{(\w+)\}\}/g, (_, key) => (key in map ? map[key] : `{{${key}}}`))
+    .trimEnd();
+
+  // Every prompt must point the coding agent at the rules file. Templates
+  // normally place {{agentsRules}} themselves; if one forgets, append it.
+  const withRules = rendered.includes(AGENTS_RULES_SUFFIX)
+    ? rendered
+    : `${rendered}\n\n${AGENTS_RULES_SUFFIX}`;
+
+  // Attached files land last, after the rules, so their position is the same
+  // whether or not the template placed the rules itself. Templates that use
+  // {{attachments}} own the placement instead.
+  if (!attachmentBlock || def.template.includes('{{attachments}}')) return withRules;
+  return `${withRules}\n\n${attachmentBlock}`;
 }

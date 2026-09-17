@@ -4,10 +4,12 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
-import { handleGetSourceInfo, handleUpdateSource, handleGetZones, handleAddBlock, handleWrapBlocks, handleUnwrapBlock, handleDeleteBlocks, handleBlockAction, handleTakeSnapshot, handleUndo, handleRedo, handleUpdateProp, handleGetComponents, handleGetThemeColors, handleUpdateThemeColor, handleGetThemeTokens, handleUpdateThemeToken, handleUpdateFontFamily, handleUploadImage, handleCloudflarePublishMetadata, handleCloudflarePublishSaveName, handleCloudflarePublishStart, handleCloudflarePublishStatus, handleCloudflareLoginStart, handleCloudflareLogout, handleCloudflareAuthStatus } from './backend/server';
+import { handleGetSourceInfo, handleUpdateSource, handleGetZones, handleAddBlock, handleWrapBlocks, handleUnwrapBlock, handleDeleteBlocks, handleBlockAction, handleTakeSnapshot, handleUndo, handleRedo, handleUpdateProp, handleGetComponents, handleGetThemeColors, handleUpdateThemeColor, handleGetThemeTokens, handleUpdateThemeToken, handleUpdateFontFamily, handleUploadImage, handleSavePromptAttachment, sweepPromptAttachments, initPublishState, handleCloudflarePublishMetadata, handleCloudflarePublishSaveName, handleCloudflarePublishStart, handleCloudflarePublishStatus, handleCloudflareLoginStart, handleCloudflareLogout, handleCloudflareAuthStatus } from './backend/server';
 import { handleConvertToSketchpad } from './backend/convert-to-sketchpad';
 import { registerSketchpadMiddleware } from './sketchpad-source';
 import { registerCommentsMiddleware } from './backend/comments-server';
+import { registerSpecsMiddleware } from './backend/specs-server';
+import { SPECS_VIEWER_HTML_PATH, SPECS_VIEWER_BUNDLE_PATH } from './backend/specs-publish';
 import { registerGitMiddleware } from './backend/git-server';
 import { registerProfileMiddleware } from './backend/profile-server';
 
@@ -18,33 +20,74 @@ const __dirname = path.dirname(__filename);
 const PLUGIN_DIR = path.resolve(__dirname, '..');
 const PLUGIN_VERSION = JSON.parse(fs.readFileSync(path.join(PLUGIN_DIR, 'package.json'), 'utf-8')).version as string;
 
+const INDEX_CSS_PATH = normalizePath(path.resolve(process.cwd(), 'src/index.css'));
+
+// Matches the managed Google Fonts import written to src/index.css by the font
+// picker, in either `@import url('https://...')` or `@import "https://..."` form.
+// Group 2 / group 4 hold the href depending on which form matched.
+const WEBFONT_IMPORT_RE =
+  /@import\s+(?:url\(\s*(['"]?)(https:\/\/fonts\.googleapis\.com\/[^'")]+)\1\s*\)|(['"])(https:\/\/fonts\.googleapis\.com\/[^'"]+)\3)[^;]*;?/g;
+
+/** Webfont stylesheet URLs imported by the given CSS source. */
+function extractWebfontHrefs(css: string): string[] {
+  const hrefs: string[] = [];
+  let m: RegExpExecArray | null;
+  const re = new RegExp(WEBFONT_IMPORT_RE.source, 'g');
+  while ((m = re.exec(css)) !== null) {
+    hrefs.push(m[2] ?? m[4]);
+  }
+  return hrefs;
+}
+
 /**
- * Extract the webfont stylesheet URLs the user's app depends on by reading the
- * `@import url('https://fonts.googleapis.com/...')` (and `@import url("...")`)
- * lines from src/index.css.
- *
- * These same fonts are pulled in by index.css inside the sketchpad iframe, but
- * that stylesheet is owned by Tailwind's Vite plugin and gets torn down and
- * re-injected on every mutation's HMR update. With `display=swap` that momentary
- * removal of the `@font-face` makes text flash the fallback font on each move.
- * Injecting the same font stylesheets as plain <link>s in the iframe <head>
- * keeps the @font-face continuously registered (the browser owns these links,
- * not HMR), so the glyphs never fall back between updates.
+ * Webfont stylesheet URLs the user's app depends on, read from the
+ * `@import url('https://fonts.googleapis.com/...')` lines in src/index.css.
  */
 function getWebfontHrefs(): string[] {
   try {
-    const cssPath = path.resolve(process.cwd(), 'src/index.css');
-    const css = fs.readFileSync(cssPath, 'utf-8');
-    const hrefs: string[] = [];
-    const importRegex = /@import\s+url\(\s*(['"]?)(https:\/\/fonts\.googleapis\.com\/[^'")]+)\1\s*\)/g;
-    let m: RegExpExecArray | null;
-    while ((m = importRegex.exec(css)) !== null) {
-      hrefs.push(m[2]);
-    }
-    return hrefs;
+    return extractWebfontHrefs(fs.readFileSync(INDEX_CSS_PATH, 'utf-8'));
   } catch {
     return [];
   }
+}
+
+/**
+ * Why webfonts are handled outside index.css in dev:
+ *
+ * index.css is owned by Tailwind's Vite plugin. Because it declares
+ * `@source "./sketchpads/**"` (and scans the app's modules), every canvas or
+ * sketchpad mutation that rewrites a .tsx file regenerates the stylesheet and
+ * Vite hot-swaps the `<style>` tag's contents. Re-parsing that sheet re-resolves
+ * the Google Fonts `@import`, which re-creates its `@font-face` rules in an
+ * unloaded state; with `display=swap` the fallback font paints for a frame or
+ * two on every move.
+ *
+ * Injecting the same stylesheets as persistent `<link>`s in `<head>` alone is
+ * not enough: the re-injected `@font-face` rules come later in the cascade and
+ * win over the links' already-loaded faces. So in dev we also strip the remote
+ * `@import` from index.css (see the `transform` hook) and serve the fonts
+ * exclusively through the links, keeping them out of the HMR cycle entirely.
+ * The links are computed when a page is served, so the shell reloads the
+ * canvas iframes after a font change made through the picker.
+ */
+function stripWebfontImports(css: string): string {
+  return css.replace(WEBFONT_IMPORT_RE, '');
+}
+
+/** `<head>` tags that register the app's webfonts independently of index.css. */
+function webfontHeadTags(): HtmlTagDescriptor[] {
+  const hrefs = getWebfontHrefs();
+  const tags: HtmlTagDescriptor[] = [];
+  if (hrefs.length > 0) {
+    tags.push(
+      { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' }, injectTo: 'head-prepend' },
+      { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }, injectTo: 'head-prepend' },
+    );
+    for (const href of hrefs) {
+      tags.push({ tag: 'link', attrs: { rel: 'stylesheet', href }, injectTo: 'head-prepend' });
+    }
+  }
+  return tags;
 }
 
 export function protovibeSourcePlugin(): Plugin {
@@ -53,11 +96,22 @@ export function protovibeSourcePlugin(): Plugin {
     apply: 'serve',
 
     config() {
-      // Prevent Vite from reloading the page when protovibe-data.json is written
+      // Keep Vite's watcher off files that are pure editor data, never app
+      // modules. handleHotUpdate below can only suppress *change* events —
+      // Vite never routes an add or an unlink through it, and a deleted file
+      // goes straight to a full page reload. Deleting an annotation (or undoing
+      // one into existence) removes a JSON file, so without this the canvas
+      // reloads every time.
+      const root = normalizePath(process.cwd());
       return {
         server: {
           watch: {
-            ignored: ['**/protovibe-data.json'],
+            ignored: [
+              '**/protovibe-data.json',
+              '**/.protovibe-local-data/**',
+              `${root}/src/specs/**`,
+              `${root}/src/comments/**`,
+            ],
           },
         },
       };
@@ -128,6 +182,14 @@ export function protovibeSourcePlugin(): Plugin {
         if (changedFile.endsWith(path.join('sketchpads', '_registry.json'))) return;
         lastSourceChangeAt = Date.now();
       });
+      // Round-trip liveness check for the canvas iframes' HMR sockets. Vite's
+      // own keepalive ping is fire-and-forget, so a half-open socket is never
+      // noticed; ui/hmr-liveness.ts pings here and reloads its iframe if the
+      // pong never arrives while HTTP still works.
+      server.ws.on('protovibe:ping', (data, client) => {
+        client.send('protovibe:pong', data);
+      });
+
       server.middlewares.use('/__hmr-activity', (req, res) => {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', 'no-store');
@@ -165,7 +227,17 @@ export function protovibeSourcePlugin(): Plugin {
         '/protovibe.html': path.resolve(PLUGIN_DIR, 'src/ui/protovibe.html'),
         '/components.html': path.resolve(PLUGIN_DIR, 'src/ui/components.html'),
         '/sketchpad.html': path.resolve(PLUGIN_DIR, 'src/ui/sketchpad.html'),
+        // Dev preview of the published specs viewer (see backend/specs-publish.ts)
+        '/specs.html': SPECS_VIEWER_HTML_PATH,
       };
+
+      // The viewer's prebuilt bundle, served exactly as it will be in dist/.
+      server.middlewares.use('/specs-viewer.js', (_req, res) => {
+        if (!fs.existsSync(SPECS_VIEWER_BUNDLE_PATH)) { res.statusCode = 404; res.end('specs viewer bundle not built'); return; }
+        res.setHeader('Content-Type', 'application/javascript');
+        res.setHeader('Cache-Control', 'no-store');
+        res.end(fs.readFileSync(SPECS_VIEWER_BUNDLE_PATH, 'utf-8'));
+      });
 
       server.middlewares.use(async (req, res, next) => {
         const url = req.url || '';
@@ -223,6 +295,20 @@ export function protovibeSourcePlugin(): Plugin {
       server.middlewares.use('/__update-theme-token', handleUpdateThemeToken);
       server.middlewares.use('/__update-font-family', handleUpdateFontFamily);
       server.middlewares.use('/__upload-image', handleUploadImage);
+      server.middlewares.use('/__save-prompt-attachment', handleSavePromptAttachment);
+
+      // Prompt attachments are copies whose only job is to be referenced by a
+      // copied prompt, so old ones are swept on every boot (and hourly while
+      // the server runs). They are outside the module graph, so removing them
+      // never triggers HMR.
+      sweepPromptAttachments(true);
+
+      // Publish links and version history are per-user (everyone deploys to
+      // their own Cloudflare account), so they live in the gitignored
+      // .protovibe-local-data/. Run on boot so a project that is opened but
+      // never published still gets any committed leftovers moved across.
+      initPublishState();
+
       server.middlewares.use('/__cloudflare-publish-metadata', handleCloudflarePublishMetadata);
       server.middlewares.use('/__cloudflare-publish-save-name', handleCloudflarePublishSaveName);
       server.middlewares.use('/__cloudflare-publish-start', handleCloudflarePublishStart);
@@ -296,6 +382,9 @@ export function protovibeSourcePlugin(): Plugin {
       // Comments & Notes endpoints
       registerCommentsMiddleware(server);
 
+      // Specs (annotated prototype states) endpoints
+      registerSpecsMiddleware(server);
+
       // Shared comment-author profile (~/.protovibe/profile.json)
       registerProfileMiddleware(server);
 
@@ -321,6 +410,14 @@ export function protovibeSourcePlugin(): Plugin {
         const isComponentsHtml = filename.endsWith('components.html');
         const isSketchpadHtml = filename.endsWith('sketchpad.html');
 
+        // Every canvas iframe watches its own HMR socket and reloads itself if
+        // the socket goes half-open (see ui/hmr-liveness.ts).
+        const hmrLivenessTag: HtmlTagDescriptor = {
+          tag: 'script',
+          attrs: { type: 'module', src: '/@fs/' + normalizePath(path.resolve(PLUGIN_DIR, 'src/ui/hmr-liveness.ts')) },
+          injectTo: 'body',
+        };
+
         // Inject bridge.js into the user app (index.html) and components.html
         if (isIndexHtml || isComponentsHtml) {
           const bridgePath = path.resolve(__dirname, 'ui/bridge.js');
@@ -330,12 +427,14 @@ export function protovibeSourcePlugin(): Plugin {
           }
 
           return [
+            ...webfontHeadTags(),
             {
               tag: 'script',
               attrs: {},
               children: fs.readFileSync(bridgePath, 'utf-8'),
               injectTo: 'body',
             },
+            hmrLivenessTag,
           ];
         }
 
@@ -347,20 +446,7 @@ export function protovibeSourcePlugin(): Plugin {
             return [];
           }
 
-          const tags: HtmlTagDescriptor[] = [];
-
-          // Persistent webfont links so the custom font never flashes to a
-          // fallback during the CSS HMR swap that follows each canvas mutation.
-          const webfontHrefs = getWebfontHrefs();
-          if (webfontHrefs.length > 0) {
-            tags.push(
-              { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' }, injectTo: 'head-prepend' },
-              { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }, injectTo: 'head-prepend' },
-            );
-            for (const href of webfontHrefs) {
-              tags.push({ tag: 'link', attrs: { rel: 'stylesheet', href }, injectTo: 'head-prepend' });
-            }
-          }
+          const tags: HtmlTagDescriptor[] = [...webfontHeadTags()];
 
           tags.push({
             tag: 'script',
@@ -368,12 +454,22 @@ export function protovibeSourcePlugin(): Plugin {
             children: fs.readFileSync(sketchpadBridgePath, 'utf-8'),
             injectTo: 'body',
           });
+          tags.push(hmrLivenessTag);
 
           return tags;
         }
 
         return [];
       },
+    },
+
+    // Dev only (the plugin is `apply: 'serve'`): keep the Google Fonts
+    // @import out of the hot-swapped stylesheet. The fonts are served through
+    // the persistent <link>s injected by webfontHeadTags() instead.
+    transform(code, id) {
+      if (normalizePath(id.split('?')[0]) !== INDEX_CSS_PATH) return null;
+      const stripped = stripWebfontImports(code);
+      return stripped === code ? null : { code: stripped, map: null };
     },
 
     // Suppress full-page reloads for non-HMR-able sketchpad data files
@@ -389,6 +485,11 @@ export function protovibeSourcePlugin(): Plugin {
       // hot-reload on its own).
       const commentsDir = normalizePath(path.resolve(process.cwd(), 'src/comments'));
       if (file.startsWith(commentsDir)) {
+        return [];
+      }
+      // Same for spec documents / annotations under src/specs.
+      const specsDir = normalizePath(path.resolve(process.cwd(), 'src/specs'));
+      if (file.startsWith(specsDir)) {
         return [];
       }
     },

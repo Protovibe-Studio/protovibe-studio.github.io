@@ -6,6 +6,7 @@ import { FrameContainer } from './FrameContainer';
 import { ComponentPalette } from './ComponentPalette';
 import { SketchpadOverlayPanel } from './SketchpadOverlayPanel';
 import * as api from '../api';
+import * as localViewState from '../local-view-state';
 import { fetchSourceInfo, fetchZones, takeSnapshot, blockAction, addBlock } from '../../ui/api/client';
 import { parseDefaultProps } from '../utils';
 import { ToastViewport } from '../../ui/components/ToastViewport';
@@ -142,6 +143,22 @@ type SketchpadDropDetail = {
   // these as a position-only update on the source frame.
   fallbackPositions?: Array<{ blockId: string; x: number; y: number }>;
 };
+
+/**
+ * The frame's root content div: the first child of the `data-sketchpad-frame`
+ * container carrying `data-pv-loc-*` (mirrors `findFrameRoot` in the bridge).
+ * Null while the frame module has not rendered yet.
+ */
+function findFrameRootEl(frameId: string): HTMLElement | null {
+  const frameEl = document.querySelector(`[data-sketchpad-frame="${frameId}"]`);
+  if (!frameEl) return null;
+  for (const child of Array.from(frameEl.children)) {
+    if (Array.from(child.attributes).some((a) => a.name.startsWith('data-pv-loc-'))) {
+      return child as HTMLElement;
+    }
+  }
+  return null;
+}
 
 export function SketchpadApp() {
   const [sketchpads, setSketchpads] = useState<Sketchpad[]>([]);
@@ -287,16 +304,19 @@ export function SketchpadApp() {
   const initialTransformAppliedRef = useRef(false);
 
   // Load registry on mount — auto-create a default sketchpad if none exist.
-  // Restores last-active sketchpad and its persisted pan/zoom.
+  // Restores the last-active sketchpad and its pan/zoom from localStorage; with
+  // nothing saved (fresh browser, cleared storage) it opens the first sketchpad
+  // and the auto-center effect below frames it.
   useEffect(() => {
     api.fetchRegistry().then(async (reg) => {
       if (reg.sketchpads?.length > 0) {
         setSketchpads(reg.sketchpads);
-        const initial =
-          reg.sketchpads.find((s) => s.id === reg.lastActiveSketchpadId) ?? reg.sketchpads[0];
+        const lastActiveId = localViewState.getLastActiveSketchpadId();
+        const initial = reg.sketchpads.find((s) => s.id === lastActiveId) ?? reg.sketchpads[0];
         setActiveSketchpadId(initial.id);
-        if (initial.viewState) {
-          setTransform(initial.viewState);
+        const savedTransform = localViewState.getViewState(initial.id);
+        if (savedTransform) {
+          setTransform(savedTransform);
           initialTransformAppliedRef.current = true;
         }
         loadAllFrameModules(initial.id, initial.frames);
@@ -319,12 +339,17 @@ export function SketchpadApp() {
     if (!activeSketchpadId) return;
     if (lastPersistedActiveRef.current === activeSketchpadId) return;
     lastPersistedActiveRef.current = activeSketchpadId;
-    api.updateSketchpadView(activeSketchpadId, { makeActive: true }).catch(() => {});
+    localViewState.setLastActiveSketchpadId(activeSketchpadId);
   }, [activeSketchpadId]);
 
-  // Debounced + unload-safe persistence of pan/zoom for the active sketchpad.
-  // Skips the very first transform value after switching sketchpads (set programmatically
-  // from saved viewState or from auto-centering) to avoid a redundant write back.
+  // Debounced persistence of pan/zoom for the active sketchpad. The timer is
+  // trailing — every transform change clears the pending one — so a continuous
+  // pan or zoom writes nothing until the camera has been still for a second,
+  // keeping synchronous localStorage off the main thread during a gesture.
+  // Skips the very first transform value after switching sketchpads (set
+  // programmatically from saved state or from auto-centering) to avoid a
+  // redundant write back. The unload flush below covers a move that never
+  // reaches the timer.
   const lastSavedTransformRef = useRef<{ id: string; transform: CanvasTransform } | null>(null);
   useEffect(() => {
     if (!activeSketchpadId) return;
@@ -337,20 +362,18 @@ export function SketchpadApp() {
     if (last.zoom === transform.zoom && last.panX === transform.panX && last.panY === transform.panY) return;
     const handle = setTimeout(() => {
       lastSavedTransformRef.current = { id: activeSketchpadId, transform };
-      api.updateSketchpadView(activeSketchpadId, { viewState: transform }).catch(() => {});
-    }, 3000);
+      localViewState.saveViewState(activeSketchpadId, transform);
+    }, 1000);
     return () => clearTimeout(handle);
   }, [activeSketchpadId, transform]);
 
-  // Save view state on tab close / refresh via sendBeacon.
+  // Flush the camera on tab close / refresh, so a move inside the debounce
+  // window still survives.
   useEffect(() => {
     const flush = () => {
       if (!activeSketchpadId) return;
-      api.updateSketchpadView(
-        activeSketchpadId,
-        { viewState: transform, makeActive: true },
-        { keepalive: true },
-      );
+      localViewState.saveViewState(activeSketchpadId, transform);
+      localViewState.setLastActiveSketchpadId(activeSketchpadId);
     };
     window.addEventListener('pagehide', flush);
     window.addEventListener('beforeunload', flush);
@@ -537,6 +560,7 @@ export function SketchpadApp() {
     async (id: string) => {
       await runLockedMutation(async () => {
         await api.deleteSketchpad(id);
+        localViewState.forgetSketchpad(id);
         const remaining = sketchpads.filter((s) => s.id !== id);
         if (remaining.length === 0) {
           // Auto-create a default sketchpad so the canvas is never empty.
@@ -551,7 +575,7 @@ export function SketchpadApp() {
             setActiveSketchpadId(next.id);
             setSelectedFrameIds([]);
             const rect = containerRef.current?.getBoundingClientRect();
-            const baseTransform = next.viewState ?? INITIAL_TRANSFORM;
+            const baseTransform = localViewState.getViewState(next.id) ?? INITIAL_TRANSFORM;
             const safeTransform =
               rect && rect.width > 0 && rect.height > 0
                 ? ensureFramesVisible(next.frames, baseTransform, rect.width, rect.height)
@@ -1092,13 +1116,13 @@ export function SketchpadApp() {
     // the viewport to it — otherwise the canvas stays panned to where the deleted
     // sketchpad was and shows an empty page.
     if (activeSketchpadId && !reg.sketchpads.some((s) => s.id === activeSketchpadId)) {
-      const next =
-        reg.sketchpads.find((s) => s.id === reg.lastActiveSketchpadId) ?? reg.sketchpads[0];
+      const lastActiveId = localViewState.getLastActiveSketchpadId();
+      const next = reg.sketchpads.find((s) => s.id === lastActiveId) ?? reg.sketchpads[0];
       setActiveSketchpadId(next?.id ?? '');
       setSelectedFrameIds([]);
       if (next) {
         const rect = containerRef.current?.getBoundingClientRect();
-        const baseTransform = next.viewState ?? INITIAL_TRANSFORM;
+        const baseTransform = localViewState.getViewState(next.id) ?? INITIAL_TRANSFORM;
         const safeTransform =
           rect && rect.width > 0 && rect.height > 0
             ? ensureFramesVisible(next.frames, baseTransform, rect.width, rect.height)
@@ -1111,15 +1135,34 @@ export function SketchpadApp() {
     }
   }, [activeSketchpadId, activeSketchpad, loadFrameModule, loadAllFrameModules]);
 
-  // One-shot flag: set when the user clicks a frame's title bar so we both keep the
-  // frame selected AND focus the frame root in the inspector. The bridge → parent
-  // shell → us round-trip would otherwise echo PV_SET_SELECTION and clear frame focus.
-  const suppressFrameClearOnceRef = useRef(false);
+  // Whenever a frame becomes the primary canvas selection — title-bar click,
+  // create, duplicate, paste, marquee, navigation from another tab — focus its
+  // root content div in the inspector so paste / Enter / insert shortcuts act on
+  // that frame. Right after create/duplicate the frame module is still loading,
+  // so the root may not be in the DOM yet: poll briefly until it appears. A
+  // selection change while polling cancels the stale attempt.
   useEffect(() => {
-    const onFrameRootSelected = () => { suppressFrameClearOnceRef.current = true; };
-    window.addEventListener('pv-frame-root-selected', onFrameRootSelected);
-    return () => window.removeEventListener('pv-frame-root-selected', onFrameRootSelected);
-  }, []);
+    if (!selectedFrameId) return;
+    let cancelled = false;
+    let attempts = 0;
+    const tryFocus = () => {
+      if (cancelled) return;
+      if (findFrameRootEl(selectedFrameId)) {
+        window.dispatchEvent(new CustomEvent('pv-select-frame-root', { detail: { frameId: selectedFrameId } }));
+        // Mirror the title-bar click: keep keyboard focus on the frame element
+        // (inside this iframe) so frame-level shortcuts keep working. Never
+        // pull focus away from the shell or from a text field.
+        if (document.hasFocus() && !isTypingInput(document.activeElement as HTMLElement | null)) {
+          const frameEl = document.querySelector(`[data-sketchpad-frame-root="${selectedFrameId}"]`) as HTMLElement | null;
+          frameEl?.focus({ preventScroll: true });
+        }
+        return;
+      }
+      if (attempts++ < 100) setTimeout(tryFocus, 50);
+    };
+    tryFocus();
+    return () => { cancelled = true; };
+  }, [selectedFrameId]);
 
   // Listen for undo/redo completion and element selection events from the parent shell
   useEffect(() => {
@@ -1127,12 +1170,22 @@ export function SketchpadApp() {
       if (e.data?.type === 'PV_UNDO_REDO_COMPLETE') {
         reloadRegistry();
       }
-      if (e.data?.type === 'PV_SET_SELECTION' && e.data.runtimeIds && e.data.runtimeIds.length > 0) {
-        if (suppressFrameClearOnceRef.current) {
-          suppressFrameClearOnceRef.current = false;
-        } else {
-          setSelectedFrameIds([]);
-        }
+      if (e.data?.type === 'PV_SET_SELECTION' && Array.isArray(e.data.runtimeIds) && e.data.runtimeIds.length > 0) {
+        // The shell echoes every inspector selection back to us. Keep the canvas
+        // frame selection while the focused element is the root of a selected
+        // frame (that is the echo of our own pv-select-frame-root); any other
+        // selection — a child block, another frame's root — means the user
+        // drilled out of frame mode.
+        const runtimeIds: string[] = e.data.runtimeIds;
+        setSelectedFrameIds((prev) => {
+          if (prev.length === 0) return prev;
+          const onlySelectedFrameRoots = runtimeIds.every((id) => {
+            const el = document.querySelector(`[data-pv-runtime-id="${id}"]`);
+            const frameId = el?.parentElement?.getAttribute('data-sketchpad-frame');
+            return !!frameId && prev.includes(frameId);
+          });
+          return onlySelectedFrameRoots ? prev : [];
+        });
       }
       if (e.data?.type === 'PV_SKETCHPAD_ZOOM') {
         const code: string = e.data.code;
@@ -2017,10 +2070,7 @@ export function SketchpadApp() {
           }
           // Persist current transform to the outgoing sketchpad before switching.
           if (activeSketchpadId) {
-            api.updateSketchpadView(activeSketchpadId, { viewState: transform }).catch(() => {});
-            setSketchpads((prev) =>
-              prev.map((s) => (s.id === activeSketchpadId ? { ...s, viewState: transform } : s)),
-            );
+            localViewState.saveViewState(activeSketchpadId, transform);
           }
           setActiveSketchpadId(id);
           setShowSketchpadPanel(false);
@@ -2028,11 +2078,12 @@ export function SketchpadApp() {
           const sp = sketchpads.find((s) => s.id === id);
           if (sp) {
             const rect = containerRef.current?.getBoundingClientRect();
-            if (sp.viewState) {
+            const savedTransform = localViewState.getViewState(sp.id);
+            if (savedTransform) {
               const safeTransform =
                 rect && rect.width > 0 && rect.height > 0
-                  ? ensureFramesVisible(sp.frames, sp.viewState, rect.width, rect.height)
-                  : sp.viewState;
+                  ? ensureFramesVisible(sp.frames, savedTransform, rect.width, rect.height)
+                  : savedTransform;
               setTransform(safeTransform);
               initialTransformAppliedRef.current = true;
             } else {
@@ -2041,7 +2092,7 @@ export function SketchpadApp() {
             }
             loadAllFrameModules(id, sp.frames);
           }
-          api.updateSketchpadView(id, { makeActive: true }).catch(() => {});
+          localViewState.setLastActiveSketchpadId(id);
         }}
         onCreate={handleCreateSketchpad}
         onDelete={handleDeleteSketchpad}

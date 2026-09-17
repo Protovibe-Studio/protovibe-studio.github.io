@@ -14,6 +14,7 @@ import {
   type CloudflareDeployHistoryEntry,
 } from '../api/client';
 import { getCurrentAppPath } from '../utils/appPath';
+import { fetchSpecsList } from '../api/specs';
 
 // Inject spin keyframes once
 if (typeof document !== 'undefined' && !document.querySelector('#pv-spin-style')) {
@@ -53,6 +54,24 @@ function formatPublishDate(iso?: string): string {
   const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
   const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
   return `${date}, ${time}`;
+}
+
+/** Small "Specs are also published at …/specs.html" line for the popover. */
+function specsViewerNote(publishedUrl: string) {
+  if (!publishedUrl) return null;
+  const url = `${publishedUrl.replace(/\/+$/, '')}/specs.html`;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '10px' }}>
+      <span style={{ fontSize: '12px', color: theme.text_tertiary }}>Specs are also published at</span>
+      <a href={url} target="_blank" rel="noreferrer" onClick={handleExternalLinkClick}
+        style={{ fontSize: '12px', color: theme.accent_default, wordBreak: 'break-all', textDecoration: 'none' }}
+        onMouseEnter={(e) => { (e.target as HTMLElement).style.textDecoration = 'underline'; }}
+        onMouseLeave={(e) => { (e.target as HTMLElement).style.textDecoration = 'none'; }}
+      >
+        {url}
+      </a>
+    </div>
+  );
 }
 
 function DeployHistory({ history, open, onToggle }: { history: CloudflareDeployHistoryEntry[]; open: boolean; onToggle: () => void }) {
@@ -108,6 +127,9 @@ export function PublishButton() {
   const [lastPublishedAt, setLastPublishedAt] = useState('');
   const [deployHistory, setDeployHistory] = useState<CloudflareDeployHistoryEntry[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Whether the project has any specs — the popover then also points at the
+  // published read-only viewer (see backend/specs-publish.ts).
+  const [hasSpecs, setHasSpecs] = useState(false);
 
   // Cloudflare connection state — known up-front so the popover can explain
   // the flow to logged-out users before anything is deployed.
@@ -142,6 +164,15 @@ export function PublishButton() {
   // Set when the user starts a login as part of publishing, so the flow can
   // continue automatically once OAuth completes.
   const pendingPublishRef = useRef(false);
+  const openRef = useRef(open);
+  useEffect(() => { openRef.current = open; }, [open]);
+  // The "Your app is published" screen is a hand-off for someone who is
+  // watching the publish finish. Publishing keeps running in the background
+  // when the popover is closed, but then reopening should land on the home
+  // view — ready to start a new publish — rather than on a stale "Copy link"
+  // screen. Armed when a publish starts with the popover open, dropped the
+  // moment the popover closes.
+  const successViewEligibleRef = useRef(false);
 
   const applyMetadata = (data: { projectName: string; url: string; lastPublishedAt: string; deployHistory: CloudflareDeployHistoryEntry[] }) => {
     setSavedProjectName(data.projectName);
@@ -174,10 +205,18 @@ export function PublishButton() {
 
   // Re-check auth whenever the popover opens (served from a backend cache, so cheap)
   useEffect(() => {
-    if (open) refreshAuth();
-    // Closing the popover dismisses a finished publish — reopening should land
-    // on the default "Published to" view, ready to publish an update.
-    if (!open && statusRef.current === 'success') handleReset();
+    if (open) {
+      refreshAuth();
+      fetchSpecsList().then((list) => setHasSpecs(list.length > 0)).catch(() => {});
+    }
+    if (!open) {
+      // Closing the popover dismisses a finished publish — reopening should land
+      // on the default "Published to" view, ready to publish an update.
+      if (statusRef.current === 'success') handleReset();
+      // A publish still running in the background loses its claim on the
+      // success view too: the user walked away from it.
+      successViewEligibleRef.current = false;
+    }
   }, [open]);
 
   // Called when the OAuth login completes: refresh the connection badge and,
@@ -210,8 +249,16 @@ export function PublishButton() {
       try {
         const s = await fetchCloudflarePublishStatus();
         const wasWaitingForLogin = statusRef.current === 'waiting-for-browser-approval';
-        setStatus(s.status);
-        setStatusMessage(s.message ?? '');
+        // Deploy finished, but the popover was closed at some point while it ran
+        // — drop straight back to the home view instead of parking on the
+        // "Copy link" screen the user is no longer waiting on.
+        const skipSuccessView = s.status === 'success' && !successViewEligibleRef.current;
+        if (skipSuccessView) {
+          handleReset();
+        } else {
+          setStatus(s.status);
+          setStatusMessage(s.message ?? '');
+        }
         if (s.accounts) { setAccounts(s.accounts); setSelectedAccount(s.accounts[0]?.id ?? ''); }
         if (s.url) setPublishedUrl(s.url);
         if (s.authUrl) setAuthUrl(s.authUrl);
@@ -221,6 +268,7 @@ export function PublishButton() {
         }
         // Deploy finished — refresh metadata; the success view stays up until dismissed
         if (s.status === 'success') {
+          successViewEligibleRef.current = false;
           setAuthUrl('');
           setApiToken('');
           fetchCloudflarePublishMetadata().then(applyMetadata).catch(() => {});
@@ -324,6 +372,7 @@ export function PublishButton() {
   };
 
   const handlePublish = async (accountId?: string, token?: string) => {
+    successViewEligibleRef.current = openRef.current;
     setErrorText('');
     setStatus('publishing');
     setStatusMessage('Starting…');
@@ -642,6 +691,7 @@ export function PublishButton() {
             {copied ? <Check size={14} /> : <Copy size={14} />}
             {copied ? 'Copied!' : 'Copy link'}
           </button>
+          {hasSpecs && specsViewerNote(publishedUrl)}
           <button style={{ ...ghostBtnStyle, marginTop: '8px' }} onClick={handleReset}>
             Done
           </button>
@@ -725,7 +775,8 @@ export function PublishButton() {
             {sectionHeader('Published to', <CircleCheck size={14} color="#34c759" />)}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <a href={publishedLink} target="_blank" rel="noreferrer" onClick={handleExternalLinkClick}
-                style={{ display: 'block', flex: 1, fontSize: '12px', color: theme.accent_default, wordBreak: 'break-all', lineHeight: '1.4', textDecoration: 'none' }}
+                title={publishedLink}
+                style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', flex: 1, minWidth: 0, fontSize: '12px', color: theme.accent_default, wordBreak: 'break-all', lineHeight: '1.4', textDecoration: 'none' }}
                 onMouseEnter={(e) => { (e.target as HTMLElement).style.textDecoration = 'underline'; }}
                 onMouseLeave={(e) => { (e.target as HTMLElement).style.textDecoration = 'none'; }}
               >
@@ -736,8 +787,7 @@ export function PublishButton() {
                 data-tooltip="Copy link"
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: '20px', height: '20px', flexShrink: 0,
-                  height: '15px',
+                  width: '20px', height: '15px', flexShrink: 0,
                   background: 'none', border: 'none', cursor: 'pointer', padding: 0,
                   color: copied ? '#34c759' : theme.text_secondary,
                 }}
@@ -750,6 +800,7 @@ export function PublishButton() {
             {lastPublishedAt && (
               <span style={{ fontSize: '12px', color: theme.text_tertiary }}>Last published {formatPublishDate(lastPublishedAt)}</span>
             )}
+            {hasSpecs && specsViewerNote(publishedUrl)}
             {deployHistory.length > 0 && (
               <DeployHistory history={deployHistory} open={historyOpen} onToggle={() => setHistoryOpen(v => !v)} />
             )}
