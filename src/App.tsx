@@ -1443,6 +1443,21 @@ function FAQ(props: any) {
             {/* pv-editable-zone-end:z00076 */}
           </div>
           {/* pv-block-end:b00224 */}
+          {/* pv-block-start:7lqhjo */}
+          <div data-pv-block="7lqhjo" className="flex justify-center mt-10 p-4">
+            {/* pv-editable-zone-start:doeb0g */}
+              {/* pv-block-start:v5kzy8 */}
+              <a data-pv-block="v5kzy8" href="/docs" className="flex flex-col items-stretch">
+                {/* pv-editable-zone-start:e6wksp */}
+                  {/* pv-block-start:y1zuaj */}
+                  <Button data-pv-block="y1zuaj" rightIcon="mdi:arrow-right" label="Getting started guide" variant="solid" color="neutral" size="lg" />
+                  {/* pv-block-end:y1zuaj */}
+                {/* pv-editable-zone-end:e6wksp */}
+              </a>
+              {/* pv-block-end:v5kzy8 */}
+            {/* pv-editable-zone-end:doeb0g */}
+          </div>
+          {/* pv-block-end:7lqhjo */}
         {/* pv-editable-zone-end:z00074 */}
       </section>
   );
@@ -2080,7 +2095,7 @@ function Testimonial(props: any) {
             {/* pv-editable-zone-start:z00114 */}
               {/* pv-block-start:b00324 */}
               <p data-pv-block="b00324" className="font-secondary font-semibold text-[clamp(22px,2.4vw,32px)] leading-[1.35] tracking-[-0.02em] text-foreground-strong m-0">
-                Our goal is to make an AI prototyping tool that's <span className="text-foreground-primary">as powerful as Webflow or Figma.</span><em className="not-italic font-secondary font-semibold text-foreground-primary"> </em>Enjoy it for free!
+                We’re building an AI prototyping tool that's <span className="text-foreground-primary">as powerful as Webflow or Figma.</span><em className="not-italic font-secondary font-semibold text-foreground-primary"> </em>Enjoy it for free!
               </p>
               {/* pv-block-end:b00324 */}
 
