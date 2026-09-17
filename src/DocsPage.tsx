@@ -230,11 +230,6 @@ export default function DocsPage() {
                   Designing with a coding agent
                 </h2>
                 {/* pv-block-end:vh6j9k */}
-                {/* pv-block-start:paid03 */}
-                <p data-pv-block="paid03" className="text-foreground-secondary leading-[1.7]">
-                  Protovibe works nicely alongside AI coding tools. You stay in the canvas designing, while an agent works in the same project folder to make the code changes you don't want to do by hand.
-                </p>
-                {/* pv-block-end:paid03 */}
                 {/* pv-block-start:rbh3yu */}
                 <p data-pv-block="rbh3yu" className="text-foreground-secondary leading-[1.7]">
                   Protovibe was built for working with AI agents, like Claude Code or Codex.
@@ -243,7 +238,7 @@ export default function DocsPage() {
 
                 {/* pv-block-start:nnw5if */}
                 <p data-pv-block="nnw5if" className="text-foreground-secondary leading-[1.7]">
-                  The basic idea is:<br />- The coding agent makes major changes to the elements you select<br />- You tweak paddings and pixels manually
+                  The basic idea is:<br />- The coding agent makes major changes to the elements you select<br />- You tweak paddings, gaps, font colors manually, without prompting
                 </p>
                 {/* pv-block-end:nnw5if */}
                 {/* pv-block-start:clq31a */}
@@ -1490,6 +1485,16 @@ export default function DocsPage() {
               {/* pv-block-start:se3np5 */}
               <div data-pv-block="se3np5" className="w-full bg-[url('/src/images/from-protovibe/screenshot-2026-09-17-at-084047.png')] bg-contain bg-center bg-no-repeat aspect-[1061/791]" />
               {/* pv-block-end:se3np5 */}
+                {/* pv-block-start:q8nfsf */}
+                <h3 data-pv-block="q8nfsf" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
+                  Can I use Protovibe for landing pages?
+                </h3>
+                {/* pv-block-end:q8nfsf */}
+                {/* pv-block-start:adgnhp */}
+                <p data-pv-block="adgnhp" className="text-foreground-secondary leading-[1.7]">
+                  Yes! Actually this landing page you see now is made in Protovibe. Just ask your coding agent to make a landing page, but still use the design system and components from the default project template.
+                </p>
+                {/* pv-block-end:adgnhp */}
               {/* pv-editable-zone-end:ciohju */}
             </section>
             {/* pv-block-end:i0sz6q */}
