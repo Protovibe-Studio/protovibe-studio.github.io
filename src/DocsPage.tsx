@@ -1278,7 +1278,7 @@ export default function DocsPage() {
                 {/* pv-block-end:jrmiag */}
                 {/* pv-block-start:3y7lzmb */}
                 <p data-pv-block="3y7lzmb" className="text-foreground-secondary leading-[1.7]">
-                  Ask your coding agent to help you log in to GitHub from your terminal app, or log in to GitHub via the Protovibe app. The latter may not work for company repositories owned by your organization — for those, it's better to log in from the terminal using the GitHub CLI (ask your coding agent to guide you).
+                  Ask your coding agent to help you log in to GitHub from your terminal app, or log in to GitHub via the "Connect to GitHub" button. The latter may not work for company repositories owned by your organization — for those, it's better to log in from the terminal using the GitHub CLI (ask your coding agent to guide you).
                 </p>
                 {/* pv-block-end:3y7lzmb */}
                 {/* pv-block-start:rpfdmu */}
@@ -1292,15 +1292,12 @@ export default function DocsPage() {
                   {/* pv-editable-zone-start:zcol05 */}
                     {/* pv-block-start:lcol06 */}
                     <li data-pv-block="lcol06">
-                      <strong className="text-foreground-strong">A spec that actually runs.</strong> Instead of writing a long doc or annotating a Figma frame, you hand over working code with annotations baked in. There's no "did I describe this padding correctly?" — it's right there.
+                      <strong className="text-foreground-strong">A spec that is a real web app.</strong> Instead of writing a long doc or annotating a Figma frame, you hand over working code with annotations baked in. There's no "did I describe this padding correctly?" — it's right there.
                     </li>
                     {/* pv-block-end:lcol06 */}
                     {/* pv-block-start:lcol07 */}
                     <li data-pv-block="lcol07"><strong className="text-foreground-strong">A perfect input for AI agents.</strong> A developer's AI agent can read your Protovibe code directly. That's far more precise than any written spec — the agent sees the exact components, classes, and structure you intended.</li>
                     {/* pv-block-end:lcol07 */}
-                    {/* pv-block-start:lcol08 */}
-                    <li data-pv-block="lcol08"><strong className="text-foreground-strong">Real history.</strong> If you use Git, every change is saved as a step you can go back to or compare against — handy when you want to show what changed between two designs.</li>
-                    {/* pv-block-end:lcol08 */}
                     {/* pv-block-start:lcol09 */}
                     <li data-pv-block="lcol09">
                       <strong className="text-foreground-strong">No vendor lock-in.</strong> Your project is your project. Protovibe doesn't keep your work hostage — the folder is yours to keep, share, or throw away.
