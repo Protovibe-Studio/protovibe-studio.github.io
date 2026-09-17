@@ -529,7 +529,7 @@ function BYOAgent(props: any) {
             {/* pv-editable-zone-start:z00016 */}
               {/* pv-block-start:b00058 */}
               <h2 data-pv-block="b00058" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong m-0 text-balance">
-                Work with your own AI agent
+                Prototype with your own AI agent
               </h2>
               {/* pv-block-end:b00058 */}
               {/* pv-block-start:b00059 */}
@@ -539,8 +539,11 @@ function BYOAgent(props: any) {
                 subscription — your agent runs locally, your prompts stay yours.
               </p>
               {/* pv-block-end:b00059 */}
+              {/* pv-block-start:sjpehh */}
+              <div data-pv-block="sjpehh" className="w-full bg-[url('/src/images/from-protovibe/screenshot-2026-09-17-at-101936.png')] bg-contain bg-center bg-no-repeat aspect-[133/55] mt-4 rounded-xl" />
+              {/* pv-block-end:sjpehh */}
               {/* pv-block-start:0qly4m */}
-              <div data-pv-block="0qly4m" className="flex gap-2 flex-row items-center justify-center mt-8 text-foreground-primary">
+              <div data-pv-block="0qly4m" className="flex gap-2 flex-row items-center justify-center mt-8 text-foreground-default">
                 {/* pv-editable-zone-start:ac9lof */}
                 {/* pv-block-start:n7n6uh */}
                 <Icon data-pv-block="n7n6uh" iconSymbol="material-symbols:check" size="md" />
@@ -708,6 +711,22 @@ function BYOAgent(props: any) {
             {/* pv-editable-zone-end:z00017 */}
           </div>
           {/* pv-block-end:b00060 */}
+
+          {/* pv-block-start:ig4r7c */}
+          <div data-pv-block="ig4r7c" className="flex justify-center mt-10 p-4">
+            {/* pv-editable-zone-start:ig5z2m */}
+              {/* pv-block-start:ig6a8k */}
+              <a data-pv-block="ig6a8k" href="/docs" className="flex flex-col items-stretch">
+                {/* pv-editable-zone-start:ig7z4p */}
+                  {/* pv-block-start:ig8b1x */}
+                  <Button data-pv-block="ig8b1x" rightIcon="mdi:arrow-right" label="Read the intro guide" variant="solid" color="primary" size="lg" />
+                  {/* pv-block-end:ig8b1x */}
+                {/* pv-editable-zone-end:ig7z4p */}
+              </a>
+              {/* pv-block-end:ig6a8k */}
+            {/* pv-editable-zone-end:ig5z2m */}
+          </div>
+          {/* pv-block-end:ig4r7c */}
         {/* pv-editable-zone-end:z00015 */}
       </section>
   );
@@ -874,7 +893,7 @@ function HowItWorks(props: any) {
                       {/* pv-block-end:b00121 */}
                       {/* pv-block-start:b00122 */}
                       <p data-pv-block="b00122" className="text-[15px] text-foreground-secondary m-0 leading-[1.55] text-pretty">
-                        Create a prototype URL on your own Cloudflare account with a single click. No manual deployment needed.
+                        Create a prototype URL on your own Cloudflare account with a single click. Protovibe does not own your designs.
                       </p>
                       {/* pv-block-end:b00122 */}
                     {/* pv-editable-zone-end:z00034 */}
@@ -1201,7 +1220,7 @@ function ProblemSolution(props: any) {
                     {/* pv-editable-zone-start:z00055 */}
                       {/* pv-block-start:b00173 */}
                       <h3 data-pv-block="b00173" className="font-secondary font-bold text-[30px] leading-[1.1] tracking-[-0.025em] text-foreground-strong m-[0_0_4px] text-balance">
-                        Design is a code on localhost<br />
+                        Design is simply code<br />
                       </h3>
                       {/* pv-block-end:b00173 */}
                       {/* pv-block-start:b00174 */}
@@ -1263,7 +1282,9 @@ function FAQ(props: any) {
               <div data-pv-block="b00222" className="font-bold text-[12px] tracking-[0.18em] uppercase mb-[16px] text-foreground-primary">FAQ</div>
               {/* pv-block-end:b00222 */}
               {/* pv-block-start:b00223 */}
-              <h2 data-pv-block="b00223" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong m-0 text-balance">Questions, answered straight.</h2>
+              <h2 data-pv-block="b00223" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong m-0 text-balance">
+                Got questions?
+              </h2>
               {/* pv-block-end:b00223 */}
             {/* pv-editable-zone-end:z00075 */}
           </div>
@@ -1988,7 +2009,9 @@ function Hero(props: any) {
             {/* pv-block-end:b00305 */}
             {/* pv-block-start:b00306 */}
             <p data-pv-block="b00306" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:80ms] text-[clamp(16px,1.3vw,19px)] text-foreground-default mt-6 mx-auto text-balance max-w-[75ch]">
-              Protovibe Studio is an open-source tool for UX/UI designers who love the power of vibe-coding but still want to design like a human. It's a visual editor for React code, so you and your coding agent are finally on the same page.
+              Protovibe Studio is an open-source tool for pro UX/UI designers. <span>
+                Get the power of vibe-coding without losing control over every pixel.
+              </span><br /><br />
             </p>
             {/* pv-block-end:b00306 */}
             {/* pv-block-start:b00307 */}
@@ -2057,7 +2080,7 @@ function Testimonial(props: any) {
             {/* pv-editable-zone-start:z00114 */}
               {/* pv-block-start:b00324 */}
               <p data-pv-block="b00324" className="font-secondary font-semibold text-[clamp(22px,2.4vw,32px)] leading-[1.35] tracking-[-0.02em] text-foreground-strong m-0">
-                We've tried to combine the best parts of <em className="not-italic font-secondary font-semibold text-foreground-primary">Webflow</em>, <em className="not-italic font-secondary font-semibold text-foreground-primary">Figma</em> and a pro <span className="text-foreground-primary"> design system</span>. Hope you guys like it! Oh, and don't forget to send us your feedback.
+                We've tried to make an AI prototyping tool that's more powerful than <em className="not-italic font-secondary font-semibold text-foreground-primary">Webflow or</em> <em className="not-italic font-secondary font-semibold text-foreground-primary">Figma </em>and fits the professional workflow.
               </p>
               {/* pv-block-end:b00324 */}
 
@@ -2175,6 +2198,10 @@ export default function App() {
             <Testimonial data-pv-block="tm0001" />
             {/* pv-block-end:tm0001 */}
 
+            {/* pv-block-start:b00331 */}
+            <BYOAgent data-pv-block="b00331" />
+            {/* pv-block-end:b00331 */}
+
             {/* pv-block-start:b00330 */}
             <ProblemSolution data-pv-block="b00330" />
             {/* pv-block-end:b00330 */}
@@ -2182,10 +2209,6 @@ export default function App() {
             {/* pv-block-start:fl0001 */}
             <FeaturesList data-pv-block="fl0001" />
             {/* pv-block-end:fl0001 */}
-
-            {/* pv-block-start:b00331 */}
-            <BYOAgent data-pv-block="b00331" />
-            {/* pv-block-end:b00331 */}
 
             {/* pv-block-start:b00333 */}
             <FeatureGrid data-pv-block="b00333" />
