@@ -184,11 +184,6 @@ export default function DocsPage() {
                   Protovibe Studio guide &amp; documentation
                 </h1>
                 {/* pv-block-end:hd0501 */}
-                {/* pv-block-start:pp0601 */}
-                <p data-pv-block="pp0601" className="text-foreground-secondary text-[16px] leading-[1.6] max-w-[64ch]">
-                  A guided tour through Protovibe — from spinning up a project to shipping it to the web.
-                </p>
-                {/* pv-block-end:pp0601 */}
               {/* pv-editable-zone-end:zhdr01 */}
             </header>
             {/* pv-block-end:hd0301 */}
