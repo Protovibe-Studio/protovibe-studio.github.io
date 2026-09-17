@@ -2080,7 +2080,7 @@ function Testimonial(props: any) {
             {/* pv-editable-zone-start:z00114 */}
               {/* pv-block-start:b00324 */}
               <p data-pv-block="b00324" className="font-secondary font-semibold text-[clamp(22px,2.4vw,32px)] leading-[1.35] tracking-[-0.02em] text-foreground-strong m-0">
-                We've tried to make an AI prototyping tool that's more powerful than <em className="not-italic font-secondary font-semibold text-foreground-primary">Webflow or</em> <em className="not-italic font-secondary font-semibold text-foreground-primary">Figma </em>and fits the professional workflow.
+                Our goal is to make an AI prototyping tool that's <span className="text-foreground-primary">as powerful as Webflow or Figma.</span><em className="not-italic font-secondary font-semibold text-foreground-primary"> </em>Enjoy it for free!
               </p>
               {/* pv-block-end:b00324 */}
 
