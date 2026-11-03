@@ -5,7 +5,7 @@ export function SiteNav() {
   const path = usePath();
   const isDocs = path.startsWith('/docs');
   return (
-    <nav className="sticky top-0 z-50 flex items-center justify-between px-[20px] py-[14px] md:px-[40px] md:py-[18px] bg-gradient-to-b from-[#050509eb] via-[#05050999] to-transparent backdrop-blur-[8px]">
+    <nav className="sticky top-0 z-50 flex items-center justify-between px-[20px] py-[14px] md:px-[40px] md:py-[18px] bg-gradient-to-b from-[#050509eb] via-[#05050999] to-transparent">
       <a href="/" aria-label="Protovibe home">
         <Image className="bg-cover bg-center bg-no-repeat bg-[url('/src/images/from-protovibe/protovibe-studio-logo.png')] aspect-[101/12] h-3.5 sm:h-5" />
       </a>

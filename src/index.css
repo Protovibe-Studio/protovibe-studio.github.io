@@ -777,3 +777,14 @@ html {
     background-image: --value(--color-gradient-*);
   }
 }
+/* Calibrated decorative lights; only transform and opacity change per frame. */
+[data-animated-atmosphere] {
+  --atmosphere-blue: oklch(0.58 0.19 265);
+  --atmosphere-violet: oklch(0.54 0.16 305);
+  --atmosphere-rose: oklch(0.58 0.13 335);
+  contain: layout style;
+}
+[data-atmosphere-light] { position: absolute; border-radius: 50%; opacity: 0; will-change: transform, opacity; }
+[data-atmosphere-light="blue"] { width:72%; height:85%; left:-8%; top:22%; background:radial-gradient(ellipse,var(--atmosphere-blue),transparent 68%); }
+[data-atmosphere-light="violet"] { width:75%; height:90%; right:-10%; top:15%; background:radial-gradient(ellipse,var(--atmosphere-violet),transparent 68%); }
+[data-atmosphere-light="rose"] { width:65%; height:60%; left:24%; top:42%; background:radial-gradient(ellipse,var(--atmosphere-rose),transparent 69%); }

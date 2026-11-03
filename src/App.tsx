@@ -1,3 +1,4 @@
+import { AnimatedAtmosphere } from '@/components/animated-atmosphere';
 import { useState, useEffect, useRef } from 'react';
 import { usePath } from '@/pathContext';
 import { Icon } from '@/components/ui/icon';
@@ -1490,13 +1491,13 @@ export function InstallModal({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <>
       {/* pv-block-start:b00231 */}
-      <div data-pv-block="b00231" className="fixed inset-0 z-[100] bg-background-overlay flex items-start justify-center p-[12px] pt-[32px] sm:p-[24px] sm:pt-[64px] animate-[fade-in_0.2s_ease] overflow-y-auto overflow-scroll" onClick={handleClose}>
+      <div data-pv-block="b00231" className="fixed inset-0 z-[100] bg-background-overlay flex items-start justify-center p-[12px] pt-[32px] sm:p-[24px] sm:pt-[64px] animate-[fade-in_0.2s_ease] overflow-y-auto overflow-x-hidden" onClick={handleClose}>
         {/* pv-editable-zone-start:z00080 */}
           {/* pv-block-start:b00232 */}
-          <div data-pv-block="b00232" className="relative w-full rounded-[16px] p-[20px] sm:p-[36px_36px_32px] animate-[modal-in_0.25s_cubic-bezier(.2,.8,.3,1)] overflow-y-auto border-0 border-border-default shadow-2xl overflow-hidden bg-background-elevated max-w-[540px]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+          <div data-pv-block="b00232" className="relative w-full rounded-[16px] p-[20px] sm:p-[36px_36px_32px] animate-[modal-in_0.25s_cubic-bezier(.2,.8,.3,1)] border-0 border-border-default shadow-2xl overflow-hidden bg-background-elevated max-w-[540px]" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
             {/* pv-editable-zone-start:z00081 */}
               {/* pv-block-start:b00233 */}
-              <div data-pv-block="b00233" className="absolute top-[-40%] left-[-10%] right-[-10%] h-[60%] pointer-events-none blur-[80px] z-0 rounded-[16px] opacity-10" style={{ background: 'radial-gradient(circle at 30% 50%, #3d7bff, transparent 60%), radial-gradient(circle at 70% 50%, oklch(0.70 0.26 320), transparent 60%)' }} />
+              <div data-pv-block="b00233" aria-hidden="true" className="absolute inset-x-0 top-0 h-[280px] max-h-full pointer-events-none z-0" style={{ background: 'radial-gradient(ellipse 85% 100% at 25% -15%, color-mix(in srgb, var(--background-primary) 8%, transparent) 0%, color-mix(in srgb, var(--background-primary) 5%, transparent) 30%, color-mix(in srgb, var(--background-primary) 2%, transparent) 60%, transparent 100%), radial-gradient(ellipse 85% 100% at 75% -15%, oklch(0.70 0.26 320 / 0.07) 0%, oklch(0.70 0.26 320 / 0.045) 30%, oklch(0.70 0.26 320 / 0.018) 60%, oklch(0.70 0.26 320 / 0) 100%)' }} />
               {/* pv-block-end:b00233 */}
               {/* pv-block-start:b00234 */}
               <button data-pv-block="b00234" className="absolute top-[14px] right-[14px] appearance-none border-0 bg-transparent text-foreground-secondary w-[32px] h-[32px] rounded-[8px] text-[14px] transition-colors duration-150 z-[2] hover:bg-background-tertiary hover:text-foreground-strong" onClick={handleClose} aria-label="Close">✕</button>
@@ -2053,26 +2054,20 @@ function Hero(props: any) {
           {/* pv-block-end:t4dgb7 */}
 
           {/* pv-block-start:b00314 */}
-          <div data-pv-block="b00314" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:320ms] relative mt-[72px] mx-auto flex-1 rounded-lg border-border-default border">
+          <div data-pv-block="b00314" className="relative mt-[72px] mx-auto flex-1 rounded-lg">
             {/* pv-editable-zone-start:z00111 */}
               {/* pv-block-start:b00315 */}
-              <div data-pv-block="b00315" className="absolute left-[-30%] right-[-30%] top-[-75%] bottom-[5%] z-0 blur-[130px] opacity-[0.78] pointer-events-none animate-[glow-breathe_10s_ease-in-out_infinite]" style={{ WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.35) 18%, #000 50%, #000 100%)' }}>
-                {/* pv-editable-zone-start:z00112 */}
-                  {/* pv-block-start:b00316 */}
-                  <div data-pv-block="b00316" className="absolute left-[5%] top-[18%] w-[55%] h-[78%] rounded-full opacity-95" style={{ background: 'radial-gradient(circle, oklch(0.58 0.19 265), transparent 70%)' }} />
-                  {/* pv-block-end:b00316 */}
-                  {/* pv-block-start:b00317 */}
-                  <div data-pv-block="b00317" className="absolute right-[5%] top-[14%] w-[55%] h-[82%] rounded-full opacity-90" style={{ background: 'radial-gradient(circle, oklch(0.54 0.16 305), oklch(0.48 0.13 285) 50%, transparent 75%)' }} />
-                  {/* pv-block-end:b00317 */}
-                  {/* pv-block-start:b00318 */}
-                  <div data-pv-block="b00318" className="absolute left-[30%] top-[8%] w-[40%] h-[60%] rounded-full opacity-65" style={{ background: 'radial-gradient(circle, oklch(0.58 0.13 335), transparent 70%)' }} />
-                  {/* pv-block-end:b00318 */}
-                {/* pv-editable-zone-end:z00112 */}
-              </div>
+              <AnimatedAtmosphere data-pv-block="b00315" className="absolute left-[-30%] right-[-30%] top-[-75%] bottom-[5%] -translate-y-[105px] z-0 pointer-events-none" />
               {/* pv-block-end:b00315 */}
 
               {/* pv-block-start:b00319 */}
-              <ProtovibeMockup data-pv-block="b00319" />
+              <div data-pv-block="b00319" className="relative z-10 rounded-lg border-border-default border animate-[hero-rise_700ms_ease-out_backwards] [animation-delay:1320ms]">
+                {/* pv-editable-zone-start:mkz821 */}
+                  {/* pv-block-start:mks822 */}
+                  <ProtovibeMockup data-pv-block="mks822" />
+                  {/* pv-block-end:mks822 */}
+                {/* pv-editable-zone-end:mkz821 */}
+              </div>
               {/* pv-block-end:b00319 */}
             {/* pv-editable-zone-end:z00111 */}
           </div>
@@ -2166,7 +2161,7 @@ export default function App() {
 
         {/* Nav */}
         {/* pv-block-start:b00294 */}
-        <nav data-pv-block="b00294" className="sticky top-0 z-50 flex items-center justify-between px-[20px] py-[14px] md:px-[40px] md:py-[18px] bg-gradient-to-b from-[#050509eb] via-[#05050999] to-transparent backdrop-blur-[8px]">
+        <nav data-pv-block="b00294" className="sticky top-0 z-50 flex items-center justify-between px-[20px] py-[14px] md:px-[40px] md:py-[18px] bg-gradient-to-b from-[#050509eb] via-[#05050999] to-transparent">
           {/* pv-editable-zone-start:z00104 */}
             {/* pv-block-start:96mqud */}
             <Image data-pv-block="96mqud" className="bg-cover bg-center bg-no-repeat bg-[url('/src/images/from-protovibe/protovibe-studio-logo.png')] aspect-[101/12] h-3.5 sm:h-5" />
@@ -2234,7 +2229,7 @@ export default function App() {
             {/* pv-block-end:b00332 */}
 
             {/* pv-block-start:b00335 */}
-            <div data-pv-block="b00335" aria-hidden="true" className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[1500px] h-[1500px] pointer-events-none blur-[140px] opacity-[0.45] -z-10" style={{ background: 'radial-gradient(ellipse 45% 35% at 25% 75%, oklch(0.58 0.19 265), transparent 70%), radial-gradient(ellipse 45% 35% at 75% 75%, oklch(0.54 0.16 305), transparent 70%), radial-gradient(ellipse 55% 30% at 50% 60%, oklch(0.52 0.13 290), transparent 70%), radial-gradient(ellipse 70% 25% at 50% 95%, oklch(0.50 0.12 280), transparent 75%)' }} />
+            <AnimatedAtmosphere data-pv-block="b00335" className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-[170px] w-[1500px] h-[1500px] pointer-events-none -z-10" />
             {/* pv-block-end:b00335 */}
 
             {/* pv-block-start:b00337 */}
