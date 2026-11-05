@@ -16,28 +16,81 @@ import { emitToast } from '../events/toast';
 import { isTypingInput } from '../utils/elementType';
 import { getCurrentAppPath } from '../utils/appPath';
 import { useCommentUser } from '../hooks/useCommentUser';
+import { useViewportAnchorIds } from '../hooks/useViewportAnchorIds';
 import { UserProfileDialog } from './comments/UserProfileDialog';
 import { ConfirmDialog } from './ConfirmDialog';
 import type { IframeTab } from './ShellNavBar';
-import type { SpecAnnotation, SpecAuthor, SpecBundle, SpecItem, SpecStatus, SpecSummary } from '../../shared/specs';
+import type { SpecAnnotation, SpecAuthor, SpecBundle, SpecItem, SpecSummary } from '../../shared/specs';
 import {
-  makeSpecId, makeAnnotationId, makeHeadingId, specMetaFileRel, specItemFileRel, specIdSelector,
+  makeSpecId, makeAnnotationId, makeHeadingId, specMetaFileRel, specItemFileRel, specIdSelector, readSpecIds,
   rankBetween, INITIAL_RANK, isAnnotation, annotationsOf,
 } from '../../shared/specs';
 import {
   fetchSpecsList, fetchSpec, createSpec, renameSpec, deleteSpec, createSpecItem, updateSpecItem,
-  reanchorSpecItem, deleteSpecItem, exportSpec, fetchPublishedUrl, type SpecItemPatch,
+  reanchorSpecItem, deleteSpecItem, exportSpec, fetchPublishedUrl, readSpecsListSnapshot, readSpecSnapshot,
+  type SpecItemPatch,
 } from '../api/specs';
 import { SpecsInlineStyles } from './specs/specsUi';
 import { SpecsDocList, type SpecExportAction } from './specs/SpecsDocList';
-import { SpecDocView, annotationMatches, type InsertKind } from './specs/SpecDocView';
+import { SpecDocView, annotationMatches, type InsertKind, type SpecScope, type SpecStatusFilter } from './specs/SpecDocView';
 import { copySpecForDocs, downloadText } from './specs/specsExport';
+import { viewerLink } from '../../shared/specs-export';
 
 type SpecsView =
   | { level: 'docs' }
   | { level: 'doc'; specId: string; /** active annotation */ itemId?: string };
 
 const VIEW_STORAGE_KEY = 'pv-specs-view';
+// After an action writes an annotation's attribute into a source file, its
+// thumbnail waits this long before loading. A frame that loads before Vite has
+// seen the write gets the old module and can miss the HMR update that follows,
+// leaving a stale "pinned element missing" warning.
+const THUMB_HOLD_MS = 2000;
+// Remembered across sessions, like the Comments panel's scope filter.
+const SCOPE_STORAGE_KEY = 'pv-specs-filter-scope';
+
+// Live refresh. Agents edit src/specs/ straight on disk, and Vite deliberately
+// doesn't watch it (a change would reload the app), so while the panel is the
+// visible tab it re-reads what it shows every POLL_MS. A read that caught a
+// file half-written (or the spec missing) is skipped rather than shown; only
+// when the same kind of read persists this many polls is it taken as the
+// real state on disk — a file genuinely left broken, a spec really deleted.
+const POLL_MS = 2000;
+const SUSPECT_READS_TO_ACCEPT = 3;
+
+const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * `next` with every unchanged part reusing `prev`'s object, so a poll that
+ * found nothing new is a no-op render and an edit elsewhere doesn't re-run
+ * effects keyed on an untouched item (anchor checks, thumbnails).
+ */
+function mergeBundle(prev: SpecBundle | null, next: SpecBundle): SpecBundle {
+  if (!prev || prev.spec.id !== next.spec.id) return next;
+  const old = new Map(prev.items.map((it) => [it.id, it]));
+  const items = next.items.map((it) => { const o = old.get(it.id); return o && sameJson(o, it) ? o : it; });
+  const spec = sameJson(prev.spec, next.spec) ? prev.spec : next.spec;
+  const unchanged = spec === prev.spec && items.length === prev.items.length && items.every((it, i) => it === prev.items[i]);
+  return unchanged ? prev : { spec, items };
+}
+
+function loadScope(): SpecScope {
+  try {
+    const raw = localStorage.getItem(SCOPE_STORAGE_KEY);
+    if (raw === 'all' || raw === 'viewport' || raw === 'selection') return raw;
+  } catch { /* ignore */ }
+  return 'all';
+}
+
+/** Ids of the annotations pinned to `el` or anything inside it. */
+function gatherSubtreeSpecIds(el: HTMLElement | null): Set<string> {
+  const ids = new Set<string>();
+  if (!el) return ids;
+  const collect = (node: Element) => { for (const id of readSpecIds(node.getAttributeNames())) ids.add(id); };
+  collect(el);
+  el.querySelectorAll('*').forEach(collect);
+  return ids;
+}
 
 function loadView(): SpecsView {
   try {
@@ -92,14 +145,24 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<Set<SpecStatus>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<SpecStatusFilter>('all');
+  const [scope, setScope] = useState<SpecScope>(loadScope);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   // Spec whose title opens selected for typing (just created).
   const [editingTitleSpecId, setEditingTitleSpecId] = useState<string | null>(null);
   const [autoEditTextId, setAutoEditTextId] = useState<string | null>(null);
-  const [anchorFound, setAnchorFound] = useState<boolean | null>(null);
+  // Annotation id → time its thumbnail may load (see THUMB_HOLD_MS).
+  const [thumbHolds, setThumbHolds] = useState<Record<string, number>>({});
+  const holdThumb = useCallback((itemId: string) => {
+    setThumbHolds((prev) => ({ ...prev, [itemId]: Date.now() + THUMB_HOLD_MS }));
+  }, []);
   const [confirm, setConfirm] = useState<{ kind: 'spec'; specId: string } | null>(null);
   const listScrollTop = useRef(0);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  // Bumped whenever the panel writes or re-reads specs itself, so a poll
+  // that was already in flight doesn't land an older state over the result.
+  const readGenRef = useRef(0);
+  const busyRef = useRef(false);
 
   // Profile dialog + the action queued behind it (same gate as comments).
   const [profileOpen, setProfileOpen] = useState(false);
@@ -136,11 +199,55 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
   useEffect(() => { void refreshList(); fetchPublishedUrl().then(setPublishedUrl); }, [refreshList]);
   useEffect(() => { void refreshBundle(currentSpecId); }, [currentSpecId, refreshBundle]);
   useEffect(() => {
-    const handler = () => { void refreshList(); void refreshBundle(currentSpecId); };
+    const handler = () => { readGenRef.current++; void refreshList(); void refreshBundle(currentSpecId); };
     window.addEventListener(PV_SPECS_REFRESH_EVENT, handler);
     return () => window.removeEventListener(PV_SPECS_REFRESH_EVENT, handler);
   }, [refreshList, refreshBundle, currentSpecId]);
   useEffect(() => { if (isActive) { void refreshList(); fetchPublishedUrl().then(setPublishedUrl); } }, [isActive, refreshList]);
+
+  // Poll what the panel shows — the docs list or the open spec — only while
+  // it is the visible tab and the browser tab is in front; never mid-mutation.
+  useEffect(() => {
+    if (!isActive) return;
+    let cancelled = false;
+    let timer = 0;
+    // Consecutive suspect reads of the same kind (same files torn, or the spec
+    // missing) — an agent writing one file after another never adds up.
+    let suspect = 0;
+    let suspectKey = '';
+    const settled = (key: string | null) => {
+      if (key === null) { suspect = 0; suspectKey = ''; return true; }
+      suspect = key === suspectKey ? suspect + 1 : 1;
+      suspectKey = key;
+      return suspect >= SUSPECT_READS_TO_ACCEPT;
+    };
+    const tick = async () => {
+      if (!document.hidden && !busyRef.current) {
+        const gen = readGenRef.current;
+        try {
+          if (currentSpecId) {
+            const { bundle: next, unreadable } = await readSpecSnapshot(currentSpecId);
+            const key = next && unreadable.length === 0 ? null : `${next ? '' : 'missing'}|${[...unreadable].sort().join('|')}`;
+            const accept = settled(key);
+            if (!cancelled && gen === readGenRef.current && !busyRef.current && accept) {
+              if (next) setBundle((prev) => mergeBundle(prev, next));
+              else { setBundle(null); setView({ level: 'docs' }); }
+            }
+          } else {
+            const { specs: next, unreadable } = await readSpecsListSnapshot();
+            const accept = settled(unreadable.length === 0 ? null : [...unreadable].sort().join('|'));
+            if (!cancelled && gen === readGenRef.current && !busyRef.current && accept) {
+              setSpecs((prev) => (sameJson(prev, next) ? prev : next));
+            }
+          }
+        } catch { /* dev server restarting or unreachable — keep what is shown */ }
+      }
+      if (!cancelled) timer = window.setTimeout(tick, POLL_MS);
+    };
+    // First read right away, so coming back to the panel shows current files.
+    timer = window.setTimeout(tick, 0);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [isActive, currentSpecId, setView]);
 
   // An active annotation whose file disappeared (undo, delete) is deactivated.
   useEffect(() => {
@@ -162,12 +269,16 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
   // `lock` when the mutation rewrites a source file (anchor attribute).
   const run = useCallback(async (fn: () => Promise<void>, lock = false) => {
     setBusy(true);
+    busyRef.current = true;
+    readGenRef.current++;
     setError(null);
     try {
       if (lock) await runLockedMutation(fn); else await fn();
     } catch (e) {
       setError((e as Error).message || String(e));
     } finally {
+      readGenRef.current++;
+      busyRef.current = false;
       setBusy(false);
     }
   }, [runLockedMutation]);
@@ -236,6 +347,15 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
   }, true);
 
   // ── item mutations ────────────────────────────────────────────────────────────
+  // A new item must never land hidden: adding clears search, status and scope
+  // in the same render that shows it, and the list then scrolls to it as the
+  // new active row.
+  const clearFilters = () => {
+    setQuery('');
+    setStatusFilter('all');
+    setScope('all');
+  };
+
   const handleInsert = (index: number, kind: InsertKind) => {
     if (!bundle) return;
     const specId = bundle.spec.id;
@@ -252,6 +372,8 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
             ...(pinned ? { file: activeData!.file, nameEnd: activeData!.nameEnd } : {}),
           });
           await refreshList();
+          if (pinned) holdThumb(id);
+          clearFilters();
           setBundle(b);
           setAutoEditTextId(id);
           setActiveId(specId, id);
@@ -264,6 +386,7 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
       const id = makeHeadingId();
       await snapshot([specItemFileRel(specId, id)], 'add heading');
       const b = await createSpecItem({ specId, item: { type: 'heading', id, rank, title: '', level: kind } });
+      clearFilters();
       setBundle(b);
       setEditingItemId(id);
       setActiveId(specId, id);
@@ -342,10 +465,27 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
       await snapshot([specItemFileRel(specId, itemId), repin ? oldFile : '', newFile], 'update annotation reference');
       let b = await updateSpecItem(specId, itemId, { state: { tab: 'app', path: getCurrentAppPath() } });
       if (repin) b = await reanchorSpecItem(specId, itemId, newFile, activeData!.nameEnd);
+      if (repin) holdThumb(itemId);
       setBundle(b);
       emitToast({ message: repin ? 'Reference link and element updated' : 'Reference link updated', variant: 'success', durationMs: 1500 });
     }, repin);
   };
+
+  // The header's reload button: an explicit re-read that shows whatever is on
+  // disk, torn or not, and says when a file didn't parse. A spec.json that
+  // didn't parse keeps the spec open (the file is likely mid-write); only a
+  // spec that is really gone goes back to the list.
+  const reloadSpec = (specId: string) => run(async () => {
+    const { bundle: next, unreadable } = await readSpecSnapshot(specId);
+    if (next) setBundle((prev) => mergeBundle(prev, next));
+    else if (unreadable.length === 0) { setBundle(null); setView({ level: 'docs' }); }
+    await refreshList();
+    emitToast(unreadable.length
+      ? { message: `Couldn't read ${unreadable.map((f) => f.split('/').pop()).join(', ')} — the file may still be being written`, variant: 'error', durationMs: 4000 }
+      : next
+        ? { message: 'Spec reloaded', variant: 'success', durationMs: 1200 }
+        : { message: 'This spec no longer exists', variant: 'error', durationMs: 2500 });
+  });
 
   // ── export ────────────────────────────────────────────────────────────────────
   // Links point at the most recent publish (the project's main domain), read
@@ -366,6 +506,24 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
     downloadText(content, filename, action === 'html' ? 'text/html' : 'text/markdown');
   });
 
+  const handleCopyLink = (itemId: string) => run(async () => {
+    if (!bundle) return;
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+      // Start the clipboard write during the click: awaiting the metadata
+      // request first loses user activation in browsers such as Safari.
+      const text = fetchPublishedUrl().then((url) => {
+        const latestUrl = url || publishedUrl;
+        if (latestUrl !== publishedUrl) setPublishedUrl(latestUrl);
+        return new Blob([viewerLink(latestUrl, bundle.spec.id, itemId)], { type: 'text/plain' });
+      });
+      await navigator.clipboard.write([new ClipboardItem({ 'text/plain': text })]);
+    } else {
+      // Older browsers use the URL already loaded when Specs was opened.
+      await navigator.clipboard.writeText(viewerLink(publishedUrl, bundle.spec.id, itemId));
+    }
+    emitToast({ message: 'Link copied to clipboard', variant: 'success', durationMs: 2500 });
+  });
+
   // ── navigation ────────────────────────────────────────────────────────────────
   // Activate an annotation (highlight its row) and restore its state on the canvas.
   const selectAnnotation = useCallback((a: SpecAnnotation, keepFocus = false) => {
@@ -377,10 +535,33 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
   const activeItem = activeId && bundle ? bundle.items.find((it) => it.id === activeId) : undefined;
   const activeAnnotation = activeItem && isAnnotation(activeItem) ? activeItem : undefined;
 
-  // Prev / Next walk the annotations that pass the current search + filters.
+  // ── scope filter (All / In view / In selection) ──────────────────────────────
+  useEffect(() => {
+    try { localStorage.setItem(SCOPE_STORAGE_KEY, scope); } catch { /* ignore */ }
+  }, [scope]);
+  const scoping = isActive && view.level === 'doc';
+  // Annotations only pin to app-canvas elements, so both scopes read the app.
+  const pinnedIds = useMemo(
+    () => (bundle ? annotationsOf(bundle.items).filter((a) => a.anchor).map((a) => a.id) : []),
+    [bundle],
+  );
+  const viewportIds = useViewportAnchorIds(scoping && scope === 'viewport', 'app', pinnedIds, specIdSelector);
+  // The subtree walk only runs while "In selection" is showing; `bundle` is a
+  // dep so a freshly pinned annotation shows up without reselecting.
+  const selectionIds = useMemo(
+    () => (scoping && scope === 'selection' && activeIframeTab === 'app' && currentBaseTarget ? gatherSubtreeSpecIds(currentBaseTarget) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scoping, scope, activeIframeTab, currentBaseTarget, bundle],
+  );
+  // null ⇒ no scope restriction. "In selection" with nothing selected shows all,
+  // same as Comments.
+  const scopeIds: ReadonlySet<string> | null =
+    scope === 'viewport' ? viewportIds : scope === 'selection' ? selectionIds : null;
+
+  // Prev / Next walk the annotations that pass the scope + status filters.
   const navList = useMemo(
-    () => (bundle ? annotationsOf(bundle.items).filter((a) => annotationMatches(a, query, statusFilter)) : []),
-    [bundle, query, statusFilter],
+    () => (bundle ? annotationsOf(bundle.items).filter((a) => annotationMatches(a, statusFilter, scopeIds)) : []),
+    [bundle, statusFilter, scopeIds],
   );
   const navIndex = activeAnnotation ? navList.findIndex((a) => a.id === activeAnnotation.id) : -1;
   // From an active heading, Next / Prev go to the nearest annotation after /
@@ -403,6 +584,35 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
   const canPrev = !!nextFrom(-1);
   const canNext = !!nextFrom(1);
 
+  // Spec badges on the canvas: while the Specs panel shows a spec, the app
+  // canvas draws one badge per annotation pinned to the selected element (see
+  // bridge.ts). Selecting an element never moves the active annotation by
+  // itself; clicking a badge does — highlight + scroll only, since the canvas
+  // already shows the element, so its saved URL state is NOT restored.
+  const docOpen = isActive && view.level === 'doc' && !!bundle && bundle.spec.id === view.specId;
+  const badgeIds = useMemo(
+    () => (docOpen && activeIframeTab === 'app' ? pinnedIds : []),
+    [docOpen, activeIframeTab, pinnedIds],
+  );
+  useEffect(() => {
+    // Re-sent on selection changes too: a reloaded iframe starts with no ids.
+    appIframeDocument()?.defaultView?.postMessage({ type: 'PV_SET_CANVAS_BADGES', kind: 'spec', ids: badgeIds, activeId }, '*');
+  }, [badgeIds, activeId, currentBaseTarget]);
+  useEffect(() => {
+    if (!docOpen || !bundle) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type !== 'PV_CANVAS_BADGE_CLICK' || e.data.kind !== 'spec' || typeof e.data.id !== 'string') return;
+      const id: string = e.data.id;
+      if (!bundle.items.some((it) => it.id === id && isAnnotation(it))) return;
+      if (id !== activeId) { setActiveId(bundle.spec.id, id); return; }
+      // Already active: the list won't scroll on its own, so bring the row back.
+      const row = rootRef.current?.querySelector<HTMLElement>(`[data-spec-item="${id}"]`);
+      try { row?.scrollIntoView({ block: 'nearest' }); } catch { /* ignore */ }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [docOpen, bundle, activeId, setActiveId]);
+
   // ← / → step the active annotation while the Specs panel is the visible
   // tab. The shell's own keydown listener (useKeyboardShortcuts) also acts on
   // arrows when a canvas element is selected — and one usually is, since
@@ -423,24 +633,6 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
     return () => window.removeEventListener('keydown', onKey, true);
   }, [isActive, view.level, step]);
 
-  // Is the pinned element on the canvas right now? Polled briefly after opening
-  // so the check survives the iframe navigation the open triggers.
-  useEffect(() => {
-    if (!activeAnnotation?.anchor) { setAnchorFound(null); return; }
-    const sel = specIdSelector(activeAnnotation.id);
-    let attempts = 0;
-    let timer = 0;
-    const check = () => {
-      const doc = appIframeDocument();
-      if (doc?.querySelector(sel)) { setAnchorFound(true); return; }
-      if (++attempts < 20) timer = window.setTimeout(check, 200);
-      else setAnchorFound(false);
-    };
-    setAnchorFound(null);
-    timer = window.setTimeout(check, 150);
-    return () => clearTimeout(timer);
-  }, [activeAnnotation?.id, activeAnnotation?.anchor]);
-
   // ── profile gate ──────────────────────────────────────────────────────────────
   const handleProfileSave = (name: string, email: string) => {
     const saved = saveUser(name, email);
@@ -452,7 +644,7 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
 
   // ── render ────────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: theme.bg_strong, fontFamily: theme.font_ui }}>
+    <div ref={rootRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', backgroundColor: theme.bg_strong, fontFamily: theme.font_ui }}>
       <SpecsInlineStyles />
 
       {error && (
@@ -466,7 +658,7 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
           specs={specs}
           publishedUrl={publishedUrl}
           busy={busy}
-          onOpen={(id) => { setQuery(''); setStatusFilter(new Set()); setView({ level: 'doc', specId: id }); }}
+          onOpen={(id) => { setQuery(''); setStatusFilter('all'); setView({ level: 'doc', specId: id }); }}
           onCreate={handleCreateSpec}
           onDelete={(id) => setConfirm({ kind: 'spec', specId: id })}
           onExport={handleExport}
@@ -481,13 +673,16 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
           setQuery={setQuery}
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
+          scope={scope}
+          setScope={setScope}
+          scopeIds={scopeIds}
           editingItemId={editingItemId}
           onEditingDone={() => setEditingItemId(null)}
           editingTitle={editingTitleSpecId === bundle.spec.id}
           onTitleEditingDone={() => setEditingTitleSpecId(null)}
           activeId={activeId}
-          activeAnchorFound={anchorFound}
           autoEditTextId={autoEditTextId}
+          thumbHolds={thumbHolds}
           onAutoEditDone={() => setAutoEditTextId(null)}
           onBack={() => setView({ level: 'docs' })}
           onRename={(t) => handleRenameSpec(bundle.spec.id, t)}
@@ -500,8 +695,10 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ activeIframeTab, isActive })
           onUpdateItem={handleUpdateItem}
           onUpdateReference={handleUpdateReference}
           onUnpin={handleUnpin}
+          onCopyLink={handleCopyLink}
           onDeleteItem={handleDeleteItem}
           onExport={(a) => handleExport(bundle.spec.id, a)}
+          onReload={() => reloadSpec(bundle.spec.id)}
           onDeleteSpec={() => setConfirm({ kind: 'spec', specId: bundle.spec.id })}
           initialScrollTop={listScrollTop.current}
           onScrollChange={(v) => { listScrollTop.current = v; }}

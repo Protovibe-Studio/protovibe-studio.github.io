@@ -1,28 +1,67 @@
+import type { PreviewMode } from '../../../lofi/preview-mode';
 // plugins/protovibe/src/ui/components/specs/SpecDocView.tsx
 // The spec document: one spec's headings and annotations in order, edited in
 // place like a doc — headings and annotation text are click-to-edit, the
 // status is a picker on the row. One annotation is *active* (highlighted);
 // clicking a row activates it and restores its state on the canvas, Prev /
-// Next in the header step the active annotation. Also: search + status
-// filters, hover "+" insert lines between rows, drag reorder (one row, or a
-// ⌘/Shift-click multi-selection moved as a block, with edge auto-scroll so a
-// drag can cross the whole list), per-row ⋯ menu.
+// Next in the header step the active annotation. Also: search, scope (All /
+// In view / In selection) + status filter chips, hover "+" insert lines
+// between rows, drag reorder (one row, or a ⌘/Shift-click multi-selection
+// moved as a block, with edge auto-scroll so a drag can cross the whole list),
+// per-row ⋯ menu.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft, Plus, MoreHorizontal, Trash2, Search, GripVertical, Copy, Download, Heading1, Heading2, StickyNote, RefreshCw,
-  ChevronLeft, ChevronRight, ChevronDown, Link2, PinOff, User,
+  ArrowLeft, Plus, MoreHorizontal, Trash2, GripVertical, Copy, Download, Heading1, Heading2, StickyNote, RefreshCw,
+  ChevronLeft, ChevronRight, ChevronDown, Link2, PinOff, User, AlertTriangle, TextCursorInput,
 } from 'lucide-react';
 import { theme } from '../../theme';
 import { useProtovibe } from '../../context/ProtovibeContext';
-import type { SpecAnnotation, SpecBundle, SpecHeading, SpecItem, SpecStatus, SpecHeadingLevel } from '../../../shared/specs';
-import { SPEC_STATUSES, SPEC_ACTIVE_BG, isAnnotation, specIdSelector } from '../../../shared/specs';
+import type { SpecAnnotation, SpecBundle, SpecHeading, SpecItem, SpecStatus, SpecWordingStatus, SpecHeadingLevel } from '../../../shared/specs';
+import { SPEC_STATUSES, SPEC_WORDING_STATUSES, SPEC_WORDING_STATUS_CONFIG, SPEC_ACTIVE_BG, isAnnotation, specIdSelector } from '../../../shared/specs';
 import type { SpecItemPatch } from '../../api/specs';
-import { Menu, InlineEditable, StatusPicker, SPEC_STATUS_CONFIG, SPEC_SELECTED_BG, ghostBtn, iconBtn, iconBtnSm, relativeTime, type MenuItem } from './specsUi';
+import { Menu, InlineEditable, StatusPicker, SPEC_STATUS_CONFIG, SPEC_SELECTED_BG, SPECS_FADE_IN_CLASS, SPECS_ROW_BTN_CLASS, ghostBtn, iconBtn, iconBtnSm, relativeTime, type MenuItem } from './specsUi';
+import { SpecFindBar, useSpecFind, type SpecFindHighlight } from './SpecFind';
 import { SpecThumbnail } from './SpecThumbnail';
 import type { SpecExportAction } from './SpecsDocList';
 import { isTypingInput } from '../../utils/elementType';
+import { FilterChip, StatusDot, type FilterChipOption } from '../FilterChip';
+import { openPrompt } from '../../events/openPrompt';
 
 export type InsertKind = 'annotation' | 'big' | 'medium';
+
+/**
+ * Which annotations the list is scoped to: all of them, those whose pinned
+ * element is visible on the app canvas, or those pinned inside the selection.
+ */
+export type SpecScope = 'all' | 'viewport' | 'selection';
+
+/**
+ * One status to show, or 'all' for no status filtering. The same chip also
+ * filters by wording check status (`wording-{id}`), like the Comments chip
+ * mixes statuses with Unread / My threads.
+ */
+export type SpecStatusFilter = SpecStatus | `wording-${SpecWordingStatus}` | 'wording-none' | 'all';
+
+/** The wording check icon — the same glyph as Comments' "Suggest wording change". */
+const WordingIcon: React.FC<{ color: string; size?: number }> = ({ color, size = 13 }) => (
+  <TextCursorInput size={size} strokeWidth={2.5} style={{ color, flexShrink: 0 }} />
+);
+
+const SCOPE_OPTIONS: FilterChipOption<SpecScope>[] = [
+  { value: 'all', label: 'All annotations', hint: 'Every annotation in this spec' },
+  { value: 'viewport', label: 'In view', hint: 'Only annotations pinned to elements you can see on the canvas right now' },
+  { value: 'selection', label: 'In selection', hint: 'Only annotations pinned to the selected element and what’s inside it' },
+];
+
+const STATUS_OPTIONS: FilterChipOption<SpecStatusFilter>[] = [
+  { value: 'all', label: 'All statuses' },
+  ...SPEC_STATUSES.map((s) => ({ value: s, label: SPEC_STATUS_CONFIG[s].label, icon: <StatusDot color={SPEC_STATUS_CONFIG[s].color} /> })),
+  ...SPEC_WORDING_STATUSES.map((w, i): FilterChipOption<SpecStatusFilter> => ({
+    value: `wording-${w}`, label: SPEC_WORDING_STATUS_CONFIG[w].label, hint: SPEC_WORDING_STATUS_CONFIG[w].hint,
+    icon: <WordingIcon color={SPEC_WORDING_STATUS_CONFIG[w].color} size={11} />, separator: i === 0,
+  })),
+  { value: 'wording-none', label: 'No wording status', hint: 'Only annotations without a wording check status', icon: <WordingIcon color={theme.text_low} size={11} /> },
+];
 
 /** How close to the top / bottom edge of the list a drag starts auto-scrolling. */
 const AUTOSCROLL_EDGE = 56;
@@ -42,8 +81,12 @@ export interface SpecDocViewProps {
   busy: boolean;
   query: string;
   setQuery: (q: string) => void;
-  statusFilter: Set<SpecStatus>;
-  setStatusFilter: (s: Set<SpecStatus>) => void;
+  statusFilter: SpecStatusFilter;
+  setStatusFilter: (s: SpecStatusFilter) => void;
+  scope: SpecScope;
+  setScope: (s: SpecScope) => void;
+  /** Annotation ids the scope allows; null when it doesn't restrict the list. */
+  scopeIds: ReadonlySet<string> | null;
   /** Heading whose title should open in edit mode (just created). */
   editingItemId: string | null;
   onEditingDone: () => void;
@@ -52,10 +95,10 @@ export interface SpecDocViewProps {
   onTitleEditingDone: () => void;
   /** The active item (highlighted row): an annotation or a heading. */
   activeId: string | null;
-  /** Whether the active annotation's pinned element is on the canvas right now. */
-  activeAnchorFound: boolean | null;
   /** Annotation whose text editor should open focused (just created). */
   autoEditTextId: string | null;
+  /** Annotation id → time its thumbnail may load (just pinned / re-pinned). */
+  thumbHolds: Record<string, number>;
   onAutoEditDone: () => void;
   onBack: () => void;
   onRename: (title: string) => void;
@@ -67,6 +110,7 @@ export interface SpecDocViewProps {
   onNext?: () => void;
   onUpdateReference: (itemId: string) => void;
   onUnpin: (itemId: string) => void;
+  onCopyLink: (itemId: string) => void;
   /** Insert a new item before items[index] (index === items.length ⇒ append). */
   onInsert: (index: number, kind: InsertKind) => void;
   /**
@@ -78,6 +122,8 @@ export interface SpecDocViewProps {
   onUpdateItem: (itemId: string, patch: SpecItemPatch, note: string) => void;
   onDeleteItem: (itemId: string) => void;
   onExport: (action: SpecExportAction) => void;
+  /** Re-read the spec from disk now (it also refreshes on its own while shown). */
+  onReload: () => void;
   onDeleteSpec: () => void;
   initialScrollTop: number;
   onScrollChange: (top: number) => void;
@@ -92,8 +138,8 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
   const [thumbReload, setThumbReload] = useState(0);
-  // Thumbnails follow the editor's light/dark switch, exactly like the canvas.
-  const { iframeTheme } = useProtovibe();
+  // Thumbnails follow the editor's preview mode, exactly like the canvas.
+  const { previewMode } = useProtovibe();
 
   // Drag reorder state: the dragged items (one row, or the whole
   // multi-selection) and the insertion slot under the cursor.
@@ -111,7 +157,7 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
   const dragPointerY = useRef<number | null>(null);
   const dragPointerAt = useRef(0);
 
-  const filtering = p.query.trim().length > 0 || p.statusFilter.size > 0;
+  const filtering = p.statusFilter !== 'all' || p.scopeIds !== null;
 
   // Annotation numbers count annotations only, over the unfiltered list.
   const numbers = useMemo(() => {
@@ -123,8 +169,7 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
 
   const visible = useMemo(() => {
     if (!filtering) return items;
-    const q = p.query.trim().toLowerCase();
-    const matches = (a: SpecAnnotation) => annotationMatches(a, q, p.statusFilter);
+    const matches = (a: SpecAnnotation) => annotationMatches(a, p.statusFilter, p.scopeIds);
     // Keep a heading when any annotation under it (until the next heading of
     // the same or higher level) matches.
     const out: SpecItem[] = [];
@@ -132,16 +177,18 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
       const it = items[i];
       if (isAnnotation(it)) { if (matches(it)) out.push(it); continue; }
       const h = it as SpecHeading;
-      let keep = !q && p.statusFilter.size === 0;
+      let keep = false;
       for (let j = i + 1; j < items.length; j++) {
         const n = items[j];
         if (!isAnnotation(n)) { if (n.level === 'big' || h.level === 'medium') break; continue; }
         if (matches(n)) { keep = true; break; }
       }
-      if (keep || (q && h.title.toLowerCase().includes(q))) out.push(h);
+      if (keep) out.push(h);
     }
     return out;
-  }, [items, filtering, p.query, p.statusFilter]);
+  }, [items, filtering, p.statusFilter, p.scopeIds]);
+
+  const find = useSpecFind(visible.map((it) => ({ id: it.id, text: isAnnotation(it) ? it.text : it.title })), p.query, bundle.spec.id);
 
   // ── selection ────────────────────────────────────────────────────────────────
   // Rows that went away (deleted, undone, changed by a git sync) drop out of the
@@ -285,15 +332,13 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
     const first = seenActiveRef.current === undefined;
     seenActiveRef.current = p.activeId;
     if (first || !p.activeId || !scrollEl) return;
+    // A single-row selection follows the active row (Prev / Next, a canvas
+    // spec badge) instead of lingering on the old one; a multi-selection stays.
+    const activeId = p.activeId;
+    setSelected((prev) => (prev.size === 1 && !prev.has(activeId) ? new Set([activeId]) : prev));
     const row = scrollEl.querySelector<HTMLElement>(`[data-spec-item="${p.activeId}"]`);
     try { row?.scrollIntoView({ block: 'nearest' }); } catch { /* ignore */ }
   }, [p.activeId, scrollEl]);
-
-  const toggleStatus = (s: SpecStatus) => {
-    const next = new Set(p.statusFilter);
-    if (next.has(s)) next.delete(s); else next.add(s);
-    p.setStatusFilter(next);
-  };
 
   return (
     <>
@@ -317,6 +362,7 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
             <button style={{ ...iconBtn, opacity: p.onNext ? 1 : 0.35 }} disabled={!p.onNext} data-testid="spec-annotation-next" data-tooltip="Next annotation (→)" onClick={p.onNext}><ChevronRight size={16} /></button>
           </>
         )}
+        <button style={iconBtn} disabled={p.busy} data-testid="spec-reload" data-tooltip="Reload spec from disk" onClick={p.onReload}><RefreshCw size={14} /></button>
         <button ref={menuRef} style={iconBtn} data-tooltip="More" onClick={() => setMenuOpen(true)}><MoreHorizontal size={15} /></button>
         <Menu
           open={menuOpen}
@@ -333,41 +379,12 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
         />
       </div>
 
-      {/* search + filters (only once there is something to search) */}
-      {numbers.size > 0 && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', borderBottom: `1px solid ${theme.border_default}`, flexShrink: 0 }}>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <Search size={13} style={{ position: 'absolute', left: 9, color: theme.text_tertiary, pointerEvents: 'none' }} />
-          <input
-            value={p.query}
-            onChange={(e) => p.setQuery(e.target.value)}
-            onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape' && p.query) { e.preventDefault(); p.setQuery(''); } }}
-            placeholder="Search annotations…"
-            style={{
-              width: '100%', boxSizing: 'border-box', padding: '5px 10px 5px 28px',
-              background: theme.bg_secondary, border: `1px solid ${theme.border_default}`, borderRadius: 6,
-              color: theme.text_default, fontSize: 11, outline: 'none', fontFamily: theme.font_ui,
-            }}
-          />
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {SPEC_STATUSES.map((s) => {
-            const active = p.statusFilter.has(s);
-            const { label, color } = SPEC_STATUS_CONFIG[s];
-            return (
-              <button
-                key={s}
-                onClick={() => toggleStatus(s)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 999,
-                  border: `1px solid ${active ? color : theme.border_default}`, background: active ? `${color}22` : 'transparent',
-                  color: active ? color : theme.text_secondary, fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: theme.font_ui,
-                }}
-              >
-                <span style={{ width: 6, height: 6, borderRadius: 2, background: color }} />
-                {label}
-              </button>
-            );
-          })}
+      {/* search, then the filter chips (only once there is something to search) */}
+      {items.length > 0 && <div style={{ padding: '10px 12px', borderBottom: `1px solid ${theme.border_default}`, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <SpecFindBar query={p.query} onQueryChange={p.setQuery} find={find} />
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <FilterChip value={p.scope} defaultValue="all" options={SCOPE_OPTIONS} onChange={p.setScope} menuWidth={240} testId="specs-filter-scope" />
+          <FilterChip value={p.statusFilter} defaultValue="all" options={STATUS_OPTIONS} onChange={p.setStatusFilter} menuWidth={180} testId="specs-filter-status" />
         </div>
       </div>}
 
@@ -391,7 +408,7 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
 
       {/* list */}
       <div
-        ref={setScroll}
+        ref={(el) => { setScroll(el); find.listRef.current = el; }}
         onScroll={(e) => p.onScrollChange((e.target as HTMLDivElement).scrollTop)}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
@@ -403,10 +420,19 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
           </div>
         )}
         {filtering && visible.length === 0 && items.length > 0 && (
-          <div style={{ padding: '32px 24px', textAlign: 'center', color: theme.text_tertiary, fontSize: 12 }}>No annotations match.</div>
+          <div style={{ padding: '32px 24px', textAlign: 'center', color: theme.text_tertiary, fontSize: 12, lineHeight: 1.5 }}>
+            {p.statusFilter !== 'all'
+              ? 'No annotations match.'
+              : p.scope === 'selection'
+                ? 'No annotations are pinned to the selected element.'
+                : 'No pinned annotations are visible on the canvas. Scroll the canvas or switch to All annotations.'}
+          </div>
         )}
 
-        {!filtering && <InsertLine index={0} active={dropAt === 0} dragging={dragging} dragCount={dragIds.length} onInsert={p.onInsert} />}
+        {/* Adding stays available under any filter: the panel clears the filters
+            once the new item exists, so it never lands hidden. A "+" under a
+            visible row inserts right after it in the full list. */}
+        <InsertLine index={0} active={dropAt === 0} dragging={dragging} dragCount={dragIds.length} onInsert={p.onInsert} />
 
         {visible.map((it) => {
           const index = items.indexOf(it);
@@ -433,26 +459,29 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
               {isAnnotation(it) ? (
                 <AnnotationRow
                   item={it}
+                  highlight={find.highlight(it.id)}
                   active={p.activeId === it.id}
                   selected={selected.has(it.id)}
-                  anchorFound={p.activeId === it.id ? p.activeAnchorFound : null}
                   autoEditText={p.autoEditTextId === it.id}
                   onAutoEditDone={p.onAutoEditDone}
                   busy={p.busy}
                   dragging={dragIds.includes(it.id)}
                   scrollRoot={scrollEl}
                   thumbReload={thumbReload}
-                  thumbTheme={iframeTheme}
+                  thumbHoldUntil={p.thumbHolds[it.id]}
+                  thumbTheme={previewMode}
                   onSelect={(keepFocus) => { selectOnly(it.id); p.onSelectAnnotation(it.id, keepFocus); }}
                   onUpdate={(patch, note) => p.onUpdateItem(it.id, patch, note)}
                   onUpdateReference={() => p.onUpdateReference(it.id)}
                   onUnpin={() => p.onUnpin(it.id)}
+                  onCopyLink={() => p.onCopyLink(it.id)}
                   onDelete={() => p.onDeleteItem(it.id)}
                   rowProps={rowProps}
                 />
               ) : (
                 <HeadingRow
                   item={it}
+                  highlight={find.highlight(it.id)}
                   active={p.activeId === it.id}
                   selected={selected.has(it.id)}
                   editing={p.editingItemId === it.id}
@@ -464,20 +493,18 @@ export const SpecDocView: React.FC<SpecDocViewProps> = (p) => {
                   rowProps={rowProps}
                 />
               )}
-              {!filtering && (
-                <InsertLine
-                  index={index + 1}
-                  active={dropAt === index + 1}
-                  dragging={dragging}
-                  dragCount={dragIds.length}
-                  onInsert={p.onInsert}
-                />
-              )}
+              <InsertLine
+                index={index + 1}
+                active={dropAt === index + 1}
+                dragging={dragging}
+                dragCount={dragIds.length}
+                onInsert={p.onInsert}
+              />
             </React.Fragment>
           );
         })}
 
-        {!filtering && <AddButton busy={p.busy} onInsert={(kind) => p.onInsert(items.length, kind)} />}
+        <AddButton busy={p.busy} onInsert={(kind) => p.onInsert(items.length, kind)} />
       </div>
     </>
   );
@@ -548,7 +575,7 @@ const AddButton: React.FC<{ busy: boolean; onInsert: (kind: InsertKind) => void 
 
 // ── insert line ────────────────────────────────────────────────────────────────
 // A thin hover zone between rows. Hover reveals a line with a "+" in the
-// middle; clicking it asks whether to insert an annotation or a heading. The
+// middle; clicking anywhere on the line (not just the "+") asks whether to insert an annotation or a heading. The
 // same slot doubles as the drop indicator while dragging — which slot is active
 // is decided by the list's own hit test, so there is no dragover handler here.
 const InsertLine: React.FC<{
@@ -572,9 +599,11 @@ const InsertLine: React.FC<{
   const items = insertMenuItems((kind) => onInsert(index, kind));
   return (
     <div
+      data-testid="spec-insert-line"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ position: 'relative', height: active ? 10 : 8, margin: '-3px 0', zIndex: show ? 2 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}
+      onClick={(e) => { if (dragging) return; e.stopPropagation(); setOpen(true); }}
+      style={{ position: 'relative', height: active ? 10 : 8, margin: '-3px 0', zIndex: show ? 2 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: dragging ? 'default' : 'pointer' }}
     >
       <div style={{ position: 'absolute', left: 12, right: 12, top: '50%', height: 2, marginTop: -1, background: color, opacity: show ? 1 : 0, transition: 'opacity 0.12s', borderRadius: 1 }} />
       {active && dragCount > 1 && (
@@ -608,48 +637,74 @@ const InsertLine: React.FC<{
 // with the modifier clicks that build a multi-selection.
 const GRIP_TOOLTIP = 'Drag to reorder · ⌘/Ctrl-click or Shift-click to select several';
 
+// The captured URL opens a state without the pinned element — typically the
+// element only appears after an interaction (a dialog, tab, dropdown…) the URL
+// doesn't record, so the link can't reproduce what was annotated. An icon (not
+// an inline banner) so a late flip never changes the row's height.
+const PIN_MISSING_TOOLTIP =
+  'The pinned element isn’t in this link’s state — the URL doesn’t reproduce the screen you annotated.\n' +
+  'Click to open the deep-link prompt for your coding agent, then recapture the link.';
+
 const AnnotationRow: React.FC<{
   item: SpecAnnotation;
+  highlight: SpecFindHighlight;
   active: boolean;
   /** Part of the current multi-selection. */
   selected: boolean;
-  anchorFound: boolean | null;
   autoEditText: boolean;
   onAutoEditDone: () => void;
   busy: boolean;
   dragging: boolean;
   scrollRoot: HTMLElement | null;
   thumbReload: number;
-  thumbTheme: 'light' | 'dark';
+  thumbHoldUntil?: number;
+  thumbTheme: PreviewMode;
   onSelect: (keepFocus: boolean) => void;
   onUpdate: (patch: SpecItemPatch, note: string) => void;
   onUpdateReference: () => void;
   onUnpin: () => void;
+  onCopyLink: () => void;
   onDelete: () => void;
   rowProps: React.HTMLAttributes<HTMLDivElement> & { draggable: boolean };
-}> = ({ item, active, selected, anchorFound, autoEditText, onAutoEditDone, busy, dragging, scrollRoot, thumbReload, thumbTheme, onSelect, onUpdate, onUpdateReference, onUnpin, onDelete, rowProps }) => {
+}> = ({ item, highlight, active, selected, autoEditText, onAutoEditDone, busy, dragging, scrollRoot, thumbReload, thumbHoldUntil, thumbTheme, onSelect, onUpdate, onUpdateReference, onUnpin, onCopyLink, onDelete, rowProps }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [wordingMenuOpen, setWordingMenuOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const [textEditing, setTextEditing] = useState(false);
+  // Whether the pinned element showed up in the thumbnail's captured state
+  // (null until the thumbnail has loaded and looked).
+  const [thumbPinFound, setThumbPinFound] = useState<boolean | null>(null);
+  useEffect(() => { setThumbPinFound(null); }, [item.state.path, item.anchor?.file, thumbHoldUntil]);
+  const pinMissingInState = !!item.anchor && thumbPinFound === false;
   const menuRef = useRef<HTMLButtonElement | null>(null);
+  const wordingRef = useRef<HTMLButtonElement | null>(null);
   const baseBg = active ? SPEC_ACTIVE_BG : selected ? SPEC_SELECTED_BG : 'transparent';
-  // The "More" button is a hover affordance; an open menu keeps it lit while the
-  // pointer sits in the popup instead of on the row.
-  const showMenuBtn = hover || menuOpen;
-  const fileName = item.anchor?.file.split('/').pop();
+  // The "More" button appears on hover; an open menu keeps it visible while
+  // the pointer sits in the popup. A set wording status is always visible.
+  const showMenuBtn = hover || menuOpen || wordingMenuOpen;
+  const wording = item.wordingStatus ? SPEC_WORDING_STATUS_CONFIG[item.wordingStatus] : null;
+  const wordingItems = (separateFirst: boolean): MenuItem[] => SPEC_WORDING_STATUSES.map((w, i) => ({
+    label: SPEC_WORDING_STATUS_CONFIG[w].label, icon: <WordingIcon color={SPEC_WORDING_STATUS_CONFIG[w].color} />,
+    selected: item.wordingStatus === w, separator: separateFirst && i === 0, disabled: busy,
+    onSelect: () => onUpdate({ wordingStatus: item.wordingStatus === w ? null : w }, 'change wording check status'),
+  }));
   const statusDot = (color: string) => <span style={{ width: 8, height: 8, borderRadius: 2, background: color }} />;
+  // Order: actions, then the status tracks, then who wrote it, then Copy / Delete.
   const menuItems: MenuItem[] = [
-    { label: item.author.name, hint: item.updatedAt ? `edited ${relativeTime(item.updatedAt)}` : relativeTime(item.createdAt), icon: <User size={13} />, info: true, onSelect: () => {} },
+    { label: 'Recapture link and element', icon: <RefreshCw size={13} />, onSelect: onUpdateReference, disabled: busy },
+    { label: 'Show on canvas', icon: <Link2 size={13} />, onSelect: () => onSelect(false) },
+    { label: 'Unpin element', icon: <PinOff size={13} />, onSelect: onUnpin, disabled: !item.anchor || busy },
     // Status: the row only shows its picker once a status is set, so this is
     // where a status is first chosen.
     ...SPEC_STATUSES.map((s, i): MenuItem => ({
       label: SPEC_STATUS_CONFIG[s].label, icon: statusDot(SPEC_STATUS_CONFIG[s].color), selected: item.status === s, separator: i === 0,
       disabled: busy, onSelect: () => onUpdate({ status: item.status === s ? null : s }, 'change annotation status'),
     })),
-    { label: 'Show on canvas', hint: item.state.path, icon: <Link2 size={13} />, separator: true, onSelect: () => onSelect(false) },
-    { label: 'Recapture link and element', icon: <RefreshCw size={13} />, onSelect: onUpdateReference, disabled: busy },
-    { label: 'Unpin element', hint: item.anchor ? `Element in ${fileName}` : undefined, icon: <PinOff size={13} />, onSelect: onUnpin, disabled: !item.anchor || busy },
-    { label: 'Delete annotation', icon: <Trash2 size={13} />, danger: true, separator: true, onSelect: onDelete },
+    // Wording check status: a separate track, aligned with the thumbnail’s bottom edge.
+    ...wordingItems(true),
+    { label: item.author.name, hint: item.updatedAt ? `edited ${relativeTime(item.updatedAt)}` : relativeTime(item.createdAt), icon: <User size={13} />, info: true, separator: true, onSelect: () => {} },
+    { label: 'Copy published link', icon: <Link2 size={13} />, separator: true, onSelect: onCopyLink },
+    { label: 'Delete annotation', icon: <Trash2 size={13} />, danger: true, onSelect: onDelete },
   ];
   return (
     <div
@@ -660,25 +715,29 @@ const AnnotationRow: React.FC<{
       data-active={active}
       data-selected={selected}
       style={{
-        display: 'flex', gap: 4, padding: '10px 4px 10px 0', background: baseBg, cursor: 'pointer', fontFamily: theme.font_ui,
-        opacity: dragging ? 0.4 : 1, alignItems: 'flex-start',
+        display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) 20px', columnGap: 4, rowGap: 6, padding: '10px 4px 10px 0', background: baseBg, cursor: 'pointer', fontFamily: theme.font_ui,
+        opacity: dragging ? 0.4 : 1, alignItems: 'start',
         boxShadow: active ? `inset 3px 0 0 ${theme.accent_default}` : 'none',
       }}
       onMouseEnter={(e) => { setHover(true); if (!active && !selected) e.currentTarget.style.background = theme.bg_low; }}
       onMouseLeave={(e) => { setHover(false); e.currentTarget.style.background = baseBg; }}
     >
-      <span data-tooltip={GRIP_TOOLTIP} style={{ display: 'flex', flexShrink: 0, marginTop: 4, padding: '4px 4px 4px 12px', cursor: 'grab', color: selected ? theme.accent_default : theme.text_low }}>
+      <span data-tooltip={GRIP_TOOLTIP} style={{ gridRow: '1 / span 2', display: 'flex', flexShrink: 0, marginTop: 4, padding: '4px 4px 4px 12px', cursor: 'grab', color: selected ? theme.accent_default : theme.text_low }}>
         <GripVertical size={13} />
       </span>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ gridArea: '1 / 2', minWidth: 0 }}>
         <SpecThumbnail
           src={item.state.path}
           fullWidth
           scrollRoot={scrollRoot}
           reloadKey={thumbReload}
+          holdUntil={thumbHoldUntil}
           themeMode={thumbTheme}
           revealSelector={item.anchor ? specIdSelector(item.id) : undefined}
+          onRevealResult={setThumbPinFound}
         />
+      </div>
+      <div style={{ gridArea: '2 / 2', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {/* Clicking the text opens its editor and activates the row without
             letting the canvas selection steal the editor's focus. A modifier
             click is a selection gesture instead: it must reach the row, and
@@ -689,6 +748,7 @@ const AnnotationRow: React.FC<{
         >
           <InlineEditable
             value={item.text}
+            highlight={highlight}
             placeholder="Write the annotation…"
             multiline
             editing={autoEditText || textEditing}
@@ -702,27 +762,55 @@ const AnnotationRow: React.FC<{
             <StatusPicker status={item.status} disabled={busy} onChange={(s) => onUpdate({ status: s }, 'change annotation status')} />
           </div>
         )}
-        {active && item.anchor && anchorFound === false && (
-          <span style={{ fontSize: 10, color: theme.warning_primary }}>Pinned element in {fileName} not found on this screen</span>
+      </div>
+      <div style={{ gridArea: '1 / 3', alignSelf: 'stretch', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+        {/* Kept mounted while hidden: unmounting it would reflow the row on every
+            pointer enter and leave. */}
+        <button
+          ref={menuRef}
+          className={SPECS_ROW_BTN_CLASS}
+          data-open={menuOpen}
+          style={{ ...iconBtnSm, opacity: showMenuBtn ? 1 : 0, transition: 'opacity 0.12s', pointerEvents: showMenuBtn ? 'auto' : 'none' }}
+          data-tooltip="More"
+          onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }}
+        >
+          <MoreHorizontal size={14} />
+        </button>
+        {pinMissingInState && (
+          <button
+            data-testid="spec-pin-missing-warning"
+            className={SPECS_FADE_IN_CLASS}
+            style={{ ...iconBtnSm, color: theme.warning_primary }}
+            data-tooltip={PIN_MISSING_TOOLTIP}
+            onClick={(e) => { e.stopPropagation(); openPrompt('deep-link-states'); }}
+          >
+            <AlertTriangle size={14} />
+          </button>
+        )}
+        {wording && (
+          <button
+            ref={wordingRef}
+            data-testid="spec-wording-status"
+            data-wording-status={item.wordingStatus}
+            className={SPECS_ROW_BTN_CLASS}
+            data-open={wordingMenuOpen}
+            style={{ ...iconBtnSm, marginTop: 'auto', flexShrink: 0 }}
+            data-tooltip={`Wording check: ${wording.label}\n${wording.hint}`}
+            onClick={(e) => { e.stopPropagation(); setWordingMenuOpen(true); }}
+          >
+            <WordingIcon color={wording.color} size={14} />
+          </button>
         )}
       </div>
-      {/* Kept mounted while hidden: unmounting it would reflow the row on every
-          pointer enter and leave. */}
-      <button
-        ref={menuRef}
-        style={{ ...iconBtnSm, opacity: showMenuBtn ? 1 : 0, transition: 'opacity 0.12s', pointerEvents: showMenuBtn ? 'auto' : 'none' }}
-        data-tooltip="More"
-        onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }}
-      >
-        <MoreHorizontal size={14} />
-      </button>
       <Menu open={menuOpen} anchorRef={menuRef} onClose={() => setMenuOpen(false)} items={menuItems} width={250} />
+      <Menu open={wordingMenuOpen} anchorRef={wordingRef} onClose={() => setWordingMenuOpen(false)} items={wordingItems(false)} width={200} />
     </div>
   );
 };
 
 const HeadingRow: React.FC<{
   item: SpecHeading;
+  highlight: SpecFindHighlight;
   active: boolean;
   /** Part of the current multi-selection. */
   selected: boolean;
@@ -733,7 +821,7 @@ const HeadingRow: React.FC<{
   onLevel: (level: SpecHeadingLevel) => void;
   onDelete: () => void;
   rowProps: React.HTMLAttributes<HTMLDivElement> & { draggable: boolean };
-}> = ({ item, active, selected, editing, onEditingDone, dragging, onSave, onLevel, onDelete, rowProps }) => {
+}> = ({ item, highlight, active, selected, editing, onEditingDone, dragging, onSave, onLevel, onDelete, rowProps }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const [localEditing, setLocalEditing] = useState(false);
@@ -768,6 +856,7 @@ const HeadingRow: React.FC<{
       >
         <InlineEditable
           value={item.title}
+          highlight={highlight}
           placeholder={big ? 'Big heading' : 'Medium heading'}
           editing={editing || localEditing}
           onEditingChange={(v) => { setLocalEditing(v); if (!v) onEditingDone(); }}
@@ -779,6 +868,8 @@ const HeadingRow: React.FC<{
       </div>
       <button
         ref={menuRef}
+        className={SPECS_ROW_BTN_CLASS}
+        data-open={menuOpen}
         style={{ ...iconBtnSm, opacity: showMenuBtn ? 1 : 0, transition: 'opacity 0.12s', pointerEvents: showMenuBtn ? 'auto' : 'none' }}
         data-tooltip="More"
         onClick={(e) => { e.stopPropagation(); setMenuOpen(true); }}
@@ -800,10 +891,14 @@ const HeadingRow: React.FC<{
 };
 
 /** Shared filter predicate so Prev / Next in the annotation view walk the same list. */
-export function annotationMatches(a: SpecAnnotation, query: string, statusFilter: Set<SpecStatus>): boolean {
-  if (statusFilter.size > 0 && !(a.status && statusFilter.has(a.status))) return false;
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  const hay = [a.text, a.state.path, a.status ? SPEC_STATUS_CONFIG[a.status].label : ''].join('\n').toLowerCase();
-  return hay.includes(q);
+export function annotationMatches(
+  a: SpecAnnotation, statusFilter: SpecStatusFilter, scopeIds: ReadonlySet<string> | null = null,
+): boolean {
+  if (scopeIds && !scopeIds.has(a.id)) return false;
+  if (statusFilter === 'wording-none') {
+    if (a.wordingStatus) return false;
+  } else if (statusFilter.startsWith('wording-')) {
+    if (`wording-${a.wordingStatus}` !== statusFilter) return false;
+  } else if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+  return true;
 }

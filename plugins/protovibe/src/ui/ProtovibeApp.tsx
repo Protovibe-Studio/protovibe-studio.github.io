@@ -1,7 +1,7 @@
 // plugins/protovibe/src/ui/ProtovibeApp.tsx
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ArrowRight, RotateCw, RefreshCw, Home, ExternalLink, Smartphone, X, Undo2, HelpCircle, BookOpen, Keyboard, Bug, Eraser, ListTree } from 'lucide-react';
+import { ArrowLeft, ArrowRight, RotateCw, RefreshCw, Home, ExternalLink, Smartphone, X, Undo2, HelpCircle, BookOpen, Keyboard, Bug, Eraser, ListTree, NotepadTextDashed } from 'lucide-react';
 import { useFloatingDropdownPosition } from './hooks/useFloatingDropdownPosition';
 import { ShellNavBar, IframeTab, SidebarTab } from './components/ShellNavBar';
 import { TokensTab } from './components/TokensTab';
@@ -25,10 +25,18 @@ import { INSPECTOR_WIDTH_PX } from './constants/layout';
 import { restartServer, undo } from './api/client';
 import { emitToast, formatUndoRedoMessage } from './events/toast';
 import { openInBrowser, handleExternalLinkClick } from './utils/openExternal';
+import { withLofiParam } from '../lofi/preview-mode';
 import { commentIdSelector } from '../shared/comments';
 import type { CommentContext } from '../shared/comments';
 import { consumePersistedAppPath, persistAppPath, setCurrentAppPath, getCurrentAppPath } from './utils/appPath';
 import { PV_OPEN_IN_CANVAS } from './utils/canvasLinks';
+import { PV_OPEN_PROMPT_EVENT } from './events/openPrompt';
+import {
+  setCanvasEditingLocked,
+  notifyCanvasEditBlocked,
+  PV_SET_CANVAS_EDIT_LOCKED,
+  PV_CANVAS_EDIT_BLOCKED,
+} from './utils/canvasEditGuard';
 
 // A Vite crash is often a transient state while an AI agent edits code, so the
 // shell runs each crash as an "episode" behind a loading cover instead of
@@ -145,7 +153,7 @@ export const ProtovibeApp: React.FC = () => {
     return () => window.removeEventListener('pv-comments-unread', handler);
   }, []);
 
-  const { inspectorOpen, toggleInspector, refreshComponents, setHtmlFontSize, runLockedMutation, iframeTheme, setIframeTheme, focusElement } = useProtovibe();
+  const { inspectorOpen, toggleInspector, refreshComponents, setHtmlFontSize, runLockedMutation, iframeTheme, previewMode, setPreviewMode, focusElement } = useProtovibe();
   const git = useGitSync();
   // Restore the last app path once per refresh (the stored value is consumed
   // on read; interactions re-arm it — see utils/appPath.ts).
@@ -413,6 +421,32 @@ export const ProtovibeApp: React.FC = () => {
     return () => window.removeEventListener('pv-comment-navigate', handler);
   }, [handleIframeTabChange, focusCanvasElement]);
 
+  // Comments and Specs make the canvas read-only (see utils/canvasEditGuard).
+  // The sketchpad bridge runs its own drag/resize/delete, so it gets the
+  // state too and reports blocked attempts back for the toast.
+  const canvasEditLocked = activeSidebarTab === 'comments' || activeSidebarTab === 'specs';
+  setCanvasEditingLocked(canvasEditLocked);
+  const postCanvasEditLocked = useCallback((win: Window | null | undefined) => {
+    win?.postMessage({ type: PV_SET_CANVAS_EDIT_LOCKED, locked: canvasEditLocked }, '*');
+  }, [canvasEditLocked]);
+  useEffect(() => {
+    [appIframeRef, sketchpadIframeRef, componentsIframeRef].forEach(ref => postCanvasEditLocked(ref.current?.contentWindow));
+  }, [postCanvasEditLocked]);
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === PV_CANVAS_EDIT_BLOCKED) notifyCanvasEditBlocked();
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  // A panel links to a prompt (PromptsTab opens it): bring the Prompts tab up.
+  useEffect(() => {
+    const handler = () => setActiveSidebarTab('prompts');
+    window.addEventListener(PV_OPEN_PROMPT_EVENT, handler);
+    return () => window.removeEventListener(PV_OPEN_PROMPT_EVENT, handler);
+  }, []);
+
   // The specs panel asks us to show an annotation's state: navigate the app
   // iframe to the saved path when it differs, then select the pinned element.
   // `keepFocus` is set when the click came from the annotation's text editor,
@@ -497,13 +531,14 @@ export const ProtovibeApp: React.FC = () => {
   // Re-send state whenever a specific iframe reloads (e.g. HMR full-reload)
   const handleIframeLoad = useCallback((ref: React.RefObject<HTMLIFrameElement | null>) => {
     ref.current?.contentWindow?.postMessage(
-      { type: 'PV_SET_THEME', theme: iframeTheme },
+      { type: 'PV_SET_THEME', theme: iframeTheme, lofi: previewMode === 'lofi' },
       '*'
     );
     ref.current?.contentWindow?.postMessage(
       { type: 'PV_SET_INSPECTOR_ACTIVE', active: inspectorOpen },
       '*'
     );
+    postCanvasEditLocked(ref.current?.contentWindow);
     // Block Mac trackpad pinch-to-zoom inside app and components-preview iframes.
     // Sketchpad intercepts pinch itself to zoom its infinite canvas, so skip it.
     if (ref !== sketchpadIframeRef) {
@@ -542,7 +577,7 @@ export const ProtovibeApp: React.FC = () => {
         }
       } catch {}
     }
-  }, [iframeTheme, inspectorOpen, setHtmlFontSize]);
+  }, [iframeTheme, previewMode, inspectorOpen, setHtmlFontSize, postCanvasEditLocked]);
 
   // Undo the last operation with mutation locking
   const handleUndo = useCallback(async () => {
@@ -644,11 +679,11 @@ export const ProtovibeApp: React.FC = () => {
   useEffect(() => {
     [appIframeRef, sketchpadIframeRef, componentsIframeRef].forEach(ref => {
       ref.current?.contentWindow?.postMessage(
-        { type: 'PV_SET_THEME', theme: iframeTheme },
+        { type: 'PV_SET_THEME', theme: iframeTheme, lofi: previewMode === 'lofi' },
         '*'
       );
     });
-  }, [iframeTheme]);
+  }, [iframeTheme, previewMode]);
 
   return (
     <div
@@ -813,13 +848,14 @@ export const ProtovibeApp: React.FC = () => {
               {/* Open in browser */}
               <button
                 onClick={() => {
-                  const fallback = new URL('/', window.location.href).href;
+                  let url = new URL('/', window.location.href);
                   try {
                     const loc = appIframeRef.current?.contentWindow?.location;
-                    openInBrowser(loc?.href || fallback);
+                    if (loc?.href) url = new URL(loc.href);
                   } catch {
-                    openInBrowser(fallback);
+                    // Keep the same-origin fallback if the iframe is inaccessible.
                   }
+                  openInBrowser(withLofiParam(url, previewMode === 'lofi'));
                 }}
                 data-tooltip="Open in browser"
                 style={{
@@ -918,13 +954,15 @@ export const ProtovibeApp: React.FC = () => {
                 <ListTree size={16} />
               </button>
               <div style={{ width: 1, height: 16, background: theme.border_default, margin: '4px 4px' }} />
-              {(['light', 'dark'] as const).map(t => {
-                const active = iframeTheme === t;
+              {(['light', 'dark', 'lofi'] as const).map(t => {
+                const active = previewMode === t;
                 return (
                   <button
                     key={t}
-                    onClick={() => setIframeTheme(t)}
-                    data-tooltip={t === 'light' ? 'Light mode' : 'Dark mode'}
+                    onClick={() => setPreviewMode(t === 'lofi' && active ? 'light' : t)}
+                    data-tooltip={t === 'light' ? 'Light mode' : t === 'dark' ? 'Dark mode' : 'Lofi mode'}
+                    aria-label={t === 'light' ? 'Light mode' : t === 'dark' ? 'Dark mode' : 'Lofi mode'}
+                    aria-pressed={active}
                     style={{
                       width: 26,
                       height: 24,
@@ -942,7 +980,7 @@ export const ProtovibeApp: React.FC = () => {
                     onMouseEnter={e => { if (!active) { e.currentTarget.style.background = theme.bg_low; e.currentTarget.style.color = theme.text_secondary; } }}
                     onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = theme.text_tertiary; } }}
                   >
-                    {t === 'light' ? '☀' : '☽'}
+                    {t === 'light' ? '☀' : t === 'dark' ? '☽' : <NotepadTextDashed size={16} />}
                   </button>
                 );
               })}

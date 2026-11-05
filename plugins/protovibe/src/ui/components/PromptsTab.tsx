@@ -20,6 +20,8 @@ import { useProtovibe } from '../context/ProtovibeContext';
 import { theme } from '../theme';
 import { savePromptAttachment } from '../api/client';
 import { PROMPTS, renderPrompt, PromptRenderContext, PromptFieldRef } from '../prompts/prompts-registry';
+import { useProjectRoot } from '../hooks/useProjectRoot';
+import { PV_OPEN_PROMPT_EVENT, type OpenPromptDetail } from '../events/openPrompt';
 
 type Step = 1 | 2 | 3;
 
@@ -41,19 +43,6 @@ interface PromptAttachment {
 
 let attachmentSeq = 0;
 
-
-function useProjectRoot() {
-  const [root, setRoot] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/__resolve-file-path?file=.')
-      .then(r => r.json())
-      .then(d => { if (!cancelled) setRoot(d.absolutePath ?? null); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-  return root;
-}
 
 function RefChip({ label, value }: { label: string; value: string | null }) {
   const present = !!value;
@@ -443,13 +432,14 @@ export const PromptsTab: React.FC = () => {
     const closestBlock = currentBaseTarget?.closest('[data-pv-block]') as HTMLElement | null;
     const blockId = closestBlock?.getAttribute('data-pv-block') || null;
     return {
+      projectRoot,
       file: activeData?.file ?? null,
       startLine: activeData?.startLine ?? null,
       endLine: activeData?.endLine ?? null,
       blockId,
       code: activeData?.code ?? null,
     };
-  }, [activeData, currentBaseTarget]);
+  }, [activeData, currentBaseTarget, projectRoot]);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -551,6 +541,20 @@ export const PromptsTab: React.FC = () => {
     clearAttachments();
     setStep(1);
   };
+
+  // Another panel linked to a prompt (see events/openPrompt) — open it as if
+  // picked from the list. The latest handleSelect is read through a ref so the
+  // listener is registered once.
+  const handleSelectRef = useRef(handleSelect);
+  handleSelectRef.current = handleSelect;
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { promptId } = (e as CustomEvent<OpenPromptDetail>).detail || {};
+      if (promptId && PROMPTS.some(p => p.id === promptId)) handleSelectRef.current(promptId);
+    };
+    window.addEventListener(PV_OPEN_PROMPT_EVENT, handler);
+    return () => window.removeEventListener(PV_OPEN_PROMPT_EVENT, handler);
+  }, []);
 
   const handleBack = () => {
     setSelectedId(null);
@@ -811,6 +815,7 @@ export const PromptsTab: React.FC = () => {
                 Will be attached to the prompt
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                <RefChip label="folder" value={projectRoot} />
                 {selectedPrompt.references.map(r => (
                   <RefChip key={r} label={refLabels[r]} value={refValues[r]} />
                 ))}

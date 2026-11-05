@@ -788,3 +788,90 @@ html {
 [data-atmosphere-light="blue"] { width:72%; height:85%; left:-8%; top:22%; background:radial-gradient(ellipse,var(--atmosphere-blue),transparent 68%); }
 [data-atmosphere-light="violet"] { width:75%; height:90%; right:-10%; top:15%; background:radial-gradient(ellipse,var(--atmosphere-violet),transparent 68%); }
 [data-atmosphere-light="rose"] { width:65%; height:60%; left:24%; top:42%; background:radial-gradient(ellipse,var(--atmosphere-rose),transparent 69%); }
+
+/* The glow follows the button silhouette; its opacity fades independently. */
+.hero-intro-play {
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--background-default) 55%, transparent);
+}
+.hero-intro-play::before,
+.hero-intro-play::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: hero-intro-shadow 2.31s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite, hero-intro-fade 2.31s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+}
+.hero-intro-play::after { animation-delay: -1.155s, -1.155s; }
+@keyframes hero-intro-shadow {
+  from {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, #3469d9 75%, transparent),
+      0 0 0 0 color-mix(in srgb, #3469d9 45%, transparent);
+  }
+  to {
+    box-shadow:
+      0 0 70px 24px color-mix(in srgb, #3469d9 75%, transparent),
+      0 0 120px 38px color-mix(in srgb, #3469d9 45%, transparent);
+  }
+}
+@keyframes hero-intro-fade {
+  0% { opacity: 0; }
+  8% { opacity: .92; }
+  100% { opacity: 0; }
+}
+.hero-intro-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  padding: 80px 20px;
+  background: transparent;
+  color: var(--foreground-default);
+}
+.hero-intro-dialog[open] { display: flex; align-items: center; justify-content: center; }
+.hero-intro-dialog::backdrop { background: color-mix(in srgb, var(--background-default) 94%, transparent); }
+.hero-intro-player { width: min(1120px, 100%, calc((100dvh - 160px) * 16 / 9)); aspect-ratio: 16 / 9; }
+@media (prefers-reduced-motion: reduce) {
+  .hero-intro-play::after { display: none; }
+  .hero-intro-play::before {
+    animation: none;
+    opacity: .45;
+    box-shadow: 0 0 36px 4px #3469d9;
+  }
+}
+
+/* A one-shot, scroll-triggered illustration, not an interactive composer. */
+.agent-prompt-attachment { opacity: 0; transform: scale(.5); }
+.agent-prompt-preview[data-started=true] .agent-prompt-attachment {
+  animation: agent-attachment-pop 900ms cubic-bezier(.22, 1.5, .36, 1) 650ms both;
+}
+.agent-prompt-pointer { opacity: 0; }
+.agent-prompt-preview[data-started=true] .agent-prompt-pointer {
+  animation: agent-attachment-pointer 1900ms ease-in-out both;
+}
+.agent-prompt-copy[data-typing=true]::after {
+  content: ''; display: inline-block; width: 2px; height: 1em;
+  background: var(--foreground-default); vertical-align: -.12em;
+  animation: agent-caret 700ms steps(1) infinite;
+}
+@keyframes agent-attachment-pop {
+  from { opacity: 0; transform: translateY(12px) scale(.5); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes agent-attachment-pointer {
+  0% { opacity: 0; transform: translate(90px, 60px); }
+  20% { opacity: 1; }
+  55% { opacity: 1; transform: translate(0, 0); }
+  100% { opacity: 0; transform: translate(15px, 20px); }
+}
+@keyframes agent-caret { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .agent-prompt-preview .agent-prompt-attachment { animation: none; opacity: 1; transform: none; }
+  .agent-prompt-preview .agent-prompt-pointer { animation: none; opacity: 0; }
+  .agent-prompt-copy::after { display: none; }
+}

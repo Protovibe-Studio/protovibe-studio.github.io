@@ -3,6 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { spawn } from 'child_process';
+import { spawnCmd } from './spawn-cmd';
+export { spawnCmd } from './spawn-cmd';
 import sharp from 'sharp';
 import { Connect } from 'vite';
 import * as babel from '@babel/core';
@@ -2723,6 +2725,21 @@ function writePublishMeta(data: Record<string, any>): void {
   fs.writeFileSync(PUBLISH_META_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8');
 }
 
+function normalizeCloudflareProjectName(name: unknown): string {
+  return typeof name === 'string' ? name.trim().toLowerCase() : '';
+}
+
+function setCfPublishError(message: string, error: unknown): void {
+  const detail = String(error);
+  // Pages uses 8000077; Workers uses 10034. Keep a wording fallback without
+  // treating unrelated token or permission errors as an unverified email.
+  if (/\[code:\s*(?:8000077|10034)\]/i.test(detail)
+    || /verify your email|email(?: address)? (?:is |has )?not (?:been )?verified|email(?: address)? must (?:be|been) verified|email verification (?:is )?required/i.test(detail)) {
+    message = 'Verify your Cloudflare email address before publishing. Open Cloudflare Dashboard → My Profile to resend the verification email, follow its link, then try publishing again.';
+  }
+  setCfState({ status: 'error', message, error: detail });
+}
+
 // ─── Per-user publish state ───────────────────────────────────────────────────
 // Where a deploy landed — the live URL, when it was last published, and the
 // per-deploy version history — used to live in protovibe-data.json, which is
@@ -3019,43 +3036,6 @@ export const handleCloudflareAuthStatus: Connect.NextHandleFunction = (req, res)
   })();
 };
 
-export function spawnCmd(
-  cmd: string,
-  args: string[],
-  opts: { cwd: string; env?: NodeJS.ProcessEnv; onData?: (chunk: string) => void; timeoutMs?: number; shell?: boolean },
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    // shell is only needed for .cmd shims (pnpm/wrangler) on Windows; callers
-    // passing secrets in argv (git auth headers) must opt out of it.
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env, stdio: 'pipe', shell: opts.shell ?? process.platform === 'win32' });
-    let out = '';
-    let settled = false;
-    const settle = (fn: typeof resolve | typeof reject, val: string | Error) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      (fn as any)(val);
-    };
-
-    const onChunk = (buf: Buffer) => { const t = buf.toString(); out += t; opts.onData?.(t); };
-    child.stdout.on('data', onChunk);
-    child.stderr.on('data', onChunk);
-    child.on('close', (code) =>
-      code === 0
-        ? settle(resolve, out)
-        : settle(reject, new Error(`[exit ${code}] ${out.slice(-600)}`)),
-    );
-    child.on('error', (err) => settle(reject, err));
-
-    const timeoutMs = opts.timeoutMs ?? 3 * 60 * 1000; // default 3 min
-    const timer = setTimeout(() => {
-      child.kill('SIGTERM');
-      setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, 5000);
-      settle(reject, new Error(`Command timed out after ${timeoutMs / 1000}s. Output:\n${out.slice(-400)}`));
-    }, timeoutMs);
-  });
-}
-
 async function runCloudflarePublish(projectName: string, accountId?: string, apiToken?: string): Promise<void> {
   const cwd = process.cwd();
   const baseEnv: NodeJS.ProcessEnv = { ...process.env, ...WRANGLER_NON_INTERACTIVE_ENV };
@@ -3098,7 +3078,7 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
   } catch (whoamiErr) {
     const errStr = String(whoamiErr);
     if (apiToken) {
-      setCfState({ status: 'error', message: 'Invalid Cloudflare API Token.', error: errStr });
+      setCfPublishError('Invalid Cloudflare API Token.', errStr);
       return;
     }
     // Distinguish between "not logged in" and genuine failures (network, wrangler crash)
@@ -3106,7 +3086,7 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
       invalidateCfAuthCache();
       setCfState({ status: 'not-logged-in', message: 'You are not logged in to Cloudflare.' });
     } else {
-      setCfState({ status: 'error', message: 'Failed to verify Cloudflare credentials.', error: errStr });
+      setCfPublishError('Failed to verify Cloudflare credentials.', errStr);
     }
     return;
   }
@@ -3192,7 +3172,7 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
           break;
         }
         if (!r.nameTaken) {
-          setCfState({ status: 'error', message: 'Failed to create Cloudflare Pages project.', error: r.error });
+          setCfPublishError('Failed to create Cloudflare Pages project.', r.error);
           return;
         }
         // taken too — loop and try another suffix
@@ -3211,7 +3191,8 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
     }
     // else: project is ours, fine to proceed
   } else if (!createResult.ok) {
-    console.warn('[protovibe] wrangler pages project create warning:', createResult.error);
+    setCfPublishError('Failed to create Cloudflare Pages project.', createResult.error);
+    return;
   }
 
   // 5. Deploy
@@ -3250,7 +3231,7 @@ async function runCloudflarePublish(projectName: string, accountId?: string, api
 
     setCfState({ status: 'success', message: 'Deployed successfully!', url: canonicalUrl });
   } catch (err) {
-    setCfState({ status: 'error', message: 'Deployment failed.', error: String(err) });
+    setCfPublishError('Deployment failed.', err);
   }
 }
 
@@ -3262,7 +3243,7 @@ export const handleCloudflarePublishMetadata: Connect.NextHandleFunction = (_req
     const pkg = readPublishMeta();
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({
-      projectName: pkg['cloudflare-wrangler-project-name'] ?? '',
+      projectName: normalizeCloudflareProjectName(pkg['cloudflare-wrangler-project-name']),
       url: state.url,
       lastPublishedAt: state.lastPublishedAt,
       deployHistory: state.deployHistory,
@@ -3278,13 +3259,13 @@ export const handleCloudflarePublishSaveName: Connect.NextHandleFunction = (req,
   req.on('data', (c) => { body += c; });
   req.on('end', () => {
     try {
-      const { projectName } = JSON.parse(body || '{}');
-      if (!projectName?.trim()) {
+      const projectName = normalizeCloudflareProjectName(JSON.parse(body || '{}').projectName);
+      if (!projectName) {
         res.statusCode = 400;
         return res.end(JSON.stringify({ error: 'projectName required' }));
       }
       const pkg = readPublishMeta();
-      pkg['cloudflare-wrangler-project-name'] = projectName.trim();
+      pkg['cloudflare-wrangler-project-name'] = projectName;
       writePublishMeta(pkg);
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ success: true }));
@@ -3309,10 +3290,16 @@ export const handleCloudflarePublishStart: Connect.NextHandleFunction = (req, re
         return res.end(JSON.stringify({ error: 'Publish already in progress.' }));
       }
       const pkg = readPublishMeta();
-      const projectName = pkg['cloudflare-wrangler-project-name'] ?? '';
+      const projectName = normalizeCloudflareProjectName(pkg['cloudflare-wrangler-project-name']);
       if (!projectName) {
         res.statusCode = 400;
         return res.end(JSON.stringify({ error: 'Project name not set.' }));
+      }
+      // Existing projects may still have a mixed-case name from the manager.
+      // Persist the normalized Cloudflare name before create, lookup or deploy.
+      if (pkg['cloudflare-wrangler-project-name'] !== projectName) {
+        pkg['cloudflare-wrangler-project-name'] = projectName;
+        writePublishMeta(pkg);
       }
       // Mark the state busy synchronously so the frontend's status poll observes
       // an active state on its next tick. Without this, the worker's first

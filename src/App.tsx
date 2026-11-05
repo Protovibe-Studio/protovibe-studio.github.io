@@ -1,3 +1,5 @@
+import { AgentPromptPreview } from '@/components/agent-prompt-preview';
+import { HeroIntro } from '@/components/hero-intro';
 import { AnimatedAtmosphere } from '@/components/animated-atmosphere';
 import { useState, useEffect, useRef } from 'react';
 import { usePath } from '@/pathContext';
@@ -262,6 +264,44 @@ function FeaturesList(props: any) {
                 </span>
               </div>
               {/* pv-block-end:l8l4fc */}
+              {/* pv-block-start:h71u2a */}
+              <div data-pv-block="h71u2a" className="flex gap-[14px] items-start">
+                {/* pv-editable-zone-start:5mjb74 */}
+                  {/* pv-block-start:hn1kp3 */}
+                  <Icon data-pv-block="hn1kp3" iconSymbol="mdi:pencil-ruler-outline" className="text-foreground-primary shrink-0 mt-[2px]" />
+                  {/* pv-block-end:hn1kp3 */}
+                  {/* pv-block-start:4dq6mo */}
+                  <TextParagraph data-pv-block="4dq6mo" typography="semibold-primary" className="text-foreground-strong">Lo-fi sketches</TextParagraph>
+                  {/* pv-block-end:4dq6mo */}
+                {/* pv-editable-zone-end:5mjb74 */}
+              </div>
+              {/* pv-block-end:h71u2a */}
+
+              {/* pv-block-start:vkwiut */}
+              <div data-pv-block="vkwiut" className="flex gap-[14px] items-start">
+                {/* pv-editable-zone-start:tpnji3 */}
+                  {/* pv-block-start:jhryg8 */}
+                  <Icon data-pv-block="jhryg8" iconSymbol="mdi:note-edit-outline" className="text-foreground-primary shrink-0 mt-[2px]" />
+                  {/* pv-block-end:jhryg8 */}
+                  {/* pv-block-start:vk61jr */}
+                  <TextParagraph data-pv-block="vk61jr" typography="semibold-primary" className="text-foreground-strong">Annotations</TextParagraph>
+                  {/* pv-block-end:vk61jr */}
+                {/* pv-editable-zone-end:tpnji3 */}
+              </div>
+              {/* pv-block-end:vkwiut */}
+
+              {/* pv-block-start:f0naz9 */}
+              <div data-pv-block="f0naz9" className="flex gap-[14px] items-start">
+                {/* pv-editable-zone-start:lmr1s0 */}
+                  {/* pv-block-start:rsaec5 */}
+                  <Icon data-pv-block="rsaec5" iconSymbol="mdi:comment-text-multiple-outline" className="text-foreground-primary shrink-0 mt-[2px]" />
+                  {/* pv-block-end:rsaec5 */}
+                  {/* pv-block-start:gqy30m */}
+                  <TextParagraph data-pv-block="gqy30m" typography="semibold-primary" className="text-foreground-strong">Comments</TextParagraph>
+                  {/* pv-block-end:gqy30m */}
+                {/* pv-editable-zone-end:lmr1s0 */}
+              </div>
+              {/* pv-block-end:f0naz9 */}
             {/* pv-editable-zone-end:z00003 */}
           </div>
           {/* pv-block-end:b00006 */}
@@ -487,7 +527,7 @@ function LogoVite() {
 
 function PoweredBy(props: any) {
   return (
-      <section {...props} data-pv-component-id="PoweredBy" className="py-[56px] border-y border-border-secondary grid-cols-[auto_1fr] md:grid-cols-[minmax(120px,0.7fr)_auto_minmax(140px,0.9fr)] items-center gap-x-[16px] gap-y-[16px] md:gap-[32px] text-left md:text-left max-md:py-[64px] flex flex-col md:flex md:flex-row md:items-center md:justify-center">
+      <section {...props} data-pv-component-id="PoweredBy" className="mt-20 py-[56px] border-y border-border-secondary grid-cols-[auto_1fr] md:grid-cols-[minmax(120px,0.7fr)_auto_minmax(140px,0.9fr)] items-center gap-x-[16px] gap-y-[16px] md:gap-[32px] text-left md:text-left max-md:py-[64px] flex flex-col md:flex md:flex-row md:items-center md:justify-center">
         {/* pv-editable-zone-start:z00013 */}
           {/* pv-block-start:b00047 */}
           <div data-pv-block="b00047" className="font-bold text-[11px] tracking-[0.18em] uppercase text-foreground-tertiary md:text-right">
@@ -526,7 +566,7 @@ function BYOAgent(props: any) {
       <section {...props} data-pv-component-id="BYOAgent" className="py-[100px]" id="agents">
         {/* pv-editable-zone-start:z00015 */}
           {/* pv-block-start:b00056 */}
-          <div data-pv-block="b00056" className="max-w-[780px] text-center mb-8 mx-auto">
+          <div data-pv-block="b00056" className="text-center mb-8 mx-auto max-w-[800px]">
             {/* pv-editable-zone-start:z00016 */}
               {/* pv-block-start:b00058 */}
               <h2 data-pv-block="b00058" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong m-0 text-balance">
@@ -540,23 +580,23 @@ function BYOAgent(props: any) {
                 subscription — your agent runs locally, your prompts stay yours.
               </p>
               {/* pv-block-end:b00059 */}
-              {/* pv-block-start:sjpehh */}
-              <div data-pv-block="sjpehh" className="w-full bg-[url('/src/images/from-protovibe/screenshot-2026-09-17-at-101936.png')] bg-contain bg-center bg-no-repeat aspect-[133/55] mt-4 rounded-xl" />
-              {/* pv-block-end:sjpehh */}
-              {/* pv-block-start:0qly4m */}
-              <div data-pv-block="0qly4m" className="flex gap-2 flex-row items-center justify-center mt-8 text-foreground-default">
-                {/* pv-editable-zone-start:ac9lof */}
-                {/* pv-block-start:n7n6uh */}
-                <Icon data-pv-block="n7n6uh" iconSymbol="material-symbols:check" size="md" />
-                {/* pv-block-end:n7n6uh */}
-                {/* pv-block-start:p6dims */}
-                <span className="font-medium" data-pv-block="p6dims">
-                  All coding agents are supported
+              {/* pv-block-start:2vo1yi */}
+              <div data-pv-block="2vo1yi" className="flex gap-2 flex-row items-center justify-center mt-8 text-foreground-default">
+                {/* pv-editable-zone-start:kwb2x3 */}
+                {/* pv-block-start:t5ltrg */}
+                <Icon data-pv-block="t5ltrg" iconSymbol="material-symbols:check" size="md" />
+                {/* pv-block-end:t5ltrg */}
+                {/* pv-block-start:e60jgb */}
+                <span className="font-medium" data-pv-block="e60jgb">
+                  All coding agents and desktop apps are supported
                 </span>
-                {/* pv-block-end:p6dims */}
-                {/* pv-editable-zone-end:ac9lof */}
+                {/* pv-block-end:e60jgb */}
+                {/* pv-editable-zone-end:kwb2x3 */}
               </div>
-              {/* pv-block-end:0qly4m */}
+              {/* pv-block-end:2vo1yi */}
+              {/* pv-block-start:sjpehh */}
+              <AgentPromptPreview data-pv-block="sjpehh" className="mt-8" />
+              {/* pv-block-end:sjpehh */}
             {/* pv-editable-zone-end:z00016 */}
           </div>
           {/* pv-block-end:b00056 */}
@@ -580,7 +620,7 @@ function BYOAgent(props: any) {
                     {/* pv-block-end:b00063 */}
                     {/* pv-block-start:0n7roe */}
                     <TextParagraph className="text-center" data-pv-block="0n7roe" typography="secondary">
-                      Cowork or Claude Code
+                      Claude Desktop, Cowork or Claude Code
                     </TextParagraph>
                     {/* pv-block-end:0n7roe */}
                     {/* pv-editable-zone-end:07q2gn */}
@@ -654,12 +694,12 @@ function BYOAgent(props: any) {
                     {/* pv-editable-zone-start:yvlalk */}
                     {/* pv-block-start:78kliu */}
                     <div data-pv-block="78kliu" className="font-secondary font-bold text-[15px] md:text-[18px] text-foreground-strong tracking-[-0.01em] grow flex flex-col justify-end text-center">
-                      OpenAI Codex
+                      OpenAI ChatGPT Codex
                     </div>
                     {/* pv-block-end:78kliu */}
                     {/* pv-block-start:z1cmyn */}
                     <TextParagraph data-pv-block="z1cmyn" typography="secondary">
-                      Terminal
+                      Desktop app &amp; Terminal
                     </TextParagraph>
                     {/* pv-block-end:z1cmyn */}
                     {/* pv-editable-zone-end:yvlalk */}
@@ -683,7 +723,7 @@ function BYOAgent(props: any) {
                   {/* pv-block-end:0t2ir5 */}
                   {/* pv-block-start:83746s */}
                   <TextParagraph className="text-center" data-pv-block="83746s" typography="secondary">
-                    CLI • Antigravity
+                    CLI or Antigravity app
                   </TextParagraph>
                   {/* pv-block-end:83746s */}
                 {/* pv-editable-zone-end:z00018 */}
@@ -820,7 +860,7 @@ function HowItWorks(props: any) {
                       {/* pv-block-end:b00108 */}
                       {/* pv-block-start:b00109 */}
                       <p data-pv-block="b00109" className="text-[15px] text-foreground-secondary m-0 leading-[1.55] text-pretty">
-                        Create a new project and jump to "Tokens" to set up your colors, fonts, spacing, and shadows. Or just paste your colors into your coding agent and ask it to match them to Protovibe tokens.
+                        Create a new project and jump to "Tokens" to set up your colors, fonts, spacing, and shadows. Or just paste your design system specs to your agents so it can adjust everything for you.
                       </p>
                       {/* pv-block-end:b00109 */}
                     {/* pv-editable-zone-end:z00030 */}
@@ -860,7 +900,7 @@ function HowItWorks(props: any) {
                       {/* pv-block-end:b00115 */}
                       {/* pv-block-start:b00116 */}
                       <p data-pv-block="b00116" className="text-[15px] text-foreground-secondary m-0 leading-[1.55] text-pretty">
-                        Easily adjust every component variant to fit your design system. It might take a few hours to get right, but it's worth the effort.
+                        Easily adjust every component variant to fit your design system using a fast components matrix. Manually tweak every pixel if your agent makes mistakes.
                       </p>
                       {/* pv-block-end:b00116 */}
                     {/* pv-editable-zone-end:z00032 */}
@@ -897,6 +937,15 @@ function HowItWorks(props: any) {
                         Create a prototype URL on your own Cloudflare account with a single click. Protovibe does not own your designs.
                       </p>
                       {/* pv-block-end:b00122 */}
+                      {/* pv-block-start:zd3lf1 */}
+                      <a data-pv-block="zd3lf1" href="https://example-protovibe-prototype-specs.pages.dev/specs" target="_blank" rel="noopener noreferrer" className="inline-flex self-start mt-4">
+                        {/* pv-editable-zone-start:fyhn7g */}
+                          {/* pv-block-start:ybe4a7 */}
+                          <Button data-pv-block="ybe4a7" label="See example prototype" variant="solid" color="neutral" rightIcon="mdi:arrow-top-right" />
+                          {/* pv-block-end:ybe4a7 */}
+                        {/* pv-editable-zone-end:fyhn7g */}
+                      </a>
+                      {/* pv-block-end:zd3lf1 */}
                     {/* pv-editable-zone-end:z00034 */}
                   </div>
                   {/* pv-block-end:b00120 */}
@@ -1258,6 +1307,65 @@ function ProblemSolution(props: any) {
                 {/* pv-editable-zone-end:z00054 */}
               </div>
               {/* pv-block-end:b00170 */}
+              {/* pv-block-start:5p2j78 */}
+              <div data-pv-block="5p2j78" className="grid grid-cols-1 md:grid-cols-[1fr_minmax(280px,380px)] gap-[28px] md:gap-[56px] items-center">
+                {/* pv-editable-zone-start:ugz8ks */}
+                  {/* pv-block-start:ussj52 */}
+                  <div data-pv-block="ussj52" className="md:order-last bg-background-secondary border border-border-strong rounded-[14px] overflow-hidden shadow-[0_20px_40px_-20px_rgba(0,0,0,.6)] relative flex items-center justify-center text-foreground-tertiary text-sm font-semibold bg-contain bg-center bg-no-repeat bg-[url('/src/images/from-protovibe/specs.png')] aspect-[640/643]">
+                    <br />
+                  </div>
+                  {/* pv-block-end:ussj52 */}
+                  {/* pv-block-start:c6etrn */}
+                  <div data-pv-block="c6etrn" className="flex flex-col gap-[22px]">
+                    {/* pv-editable-zone-start:yjtsyl */}
+                      {/* pv-block-start:7s62oc */}
+                      <h3 data-pv-block="7s62oc" className="font-secondary font-bold text-[30px] leading-[1.1] tracking-[-0.025em] text-foreground-strong m-[0_0_4px] text-balance">
+                        Hand-off annotations directly in your prototype
+                      </h3>
+                      {/* pv-block-end:7s62oc */}
+                      {/* pv-block-start:0oo0xp */}
+                      <div data-pv-block="0oo0xp" className="flex flex-col gap-[6px]">
+                        {/* pv-editable-zone-start:jkby2k */}
+                          {/* pv-block-start:t4u1b3 */}
+                          <div data-pv-block="t4u1b3" className="text-[11px] font-bold tracking-[0.18em] uppercase text-foreground-default">Problem</div>
+                          {/* pv-block-end:t4u1b3 */}
+                          {/* pv-block-start:u9r0xw */}
+                          <p data-pv-block="u9r0xw" className="text-[14.5px] text-foreground-secondary m-0 leading-[1.55] max-w-[52ch] text-pretty">
+                            Imagine you created a sophisticated prototype in HTML/CSS. How do you walk your team through its nuances? Perhaps you take screenshots, paste them to Figma or Notion and annotate manually?
+                          </p>
+                          {/* pv-block-end:u9r0xw */}
+                        {/* pv-editable-zone-end:jkby2k */}
+                      </div>
+                      {/* pv-block-end:0oo0xp */}
+                      {/* pv-block-start:lcib9h */}
+                      <div data-pv-block="lcib9h" className="flex flex-col gap-[6px]">
+                        {/* pv-editable-zone-start:c18qx0 */}
+                          {/* pv-block-start:m92iiq */}
+                          <div data-pv-block="m92iiq" className="text-[11px] font-bold tracking-[0.18em] uppercase text-foreground-primary">Solution</div>
+                          {/* pv-block-end:m92iiq */}
+                          {/* pv-block-start:6rdvep */}
+                          <p data-pv-block="6rdvep" className="text-[14.5px] text-foreground-secondary m-0 leading-[1.55] max-w-[52ch] text-pretty">
+                            In Protovibe you annotate your prototype directly in the prototype code. The annotations get published so you can share them. Each annotation has direct link. AI agents can write annotations for you.
+                          </p>
+                          {/* pv-block-end:6rdvep */}
+                      {/* pv-block-start:6oq0if */}
+                      <a data-pv-block="6oq0if" href="https://example-protovibe-prototype-specs.pages.dev/specs" target="_blank" rel="noopener noreferrer" className="inline-flex self-start mt-4">
+                        {/* pv-editable-zone-start:jflvnq */}
+                          {/* pv-block-start:avqamf */}
+                          <Button data-pv-block="avqamf" label="See example specs" variant="solid" color="primary" rightIcon="mdi:arrow-top-right" />
+                          {/* pv-block-end:avqamf */}
+                        {/* pv-editable-zone-end:jflvnq */}
+                      </a>
+                      {/* pv-block-end:6oq0if */}
+                        {/* pv-editable-zone-end:c18qx0 */}
+                      </div>
+                      {/* pv-block-end:lcib9h */}
+                    {/* pv-editable-zone-end:yjtsyl */}
+                  </div>
+                  {/* pv-block-end:c6etrn */}
+                {/* pv-editable-zone-end:ugz8ks */}
+              </div>
+              {/* pv-block-end:5p2j78 */}
 
               {/* ROW 7 */}
 
@@ -1298,7 +1406,7 @@ function FAQ(props: any) {
               <details data-pv-block="b00400" className="border-b border-border-secondary group" open>
                 {/* pv-editable-zone-start:z00200 */}
                   {/* pv-block-start:b00401 */}
-                  <summary data-pv-block="b00401" className="list-none cursor-pointer py-[24px] px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
+                  <summary data-pv-block="b00401" className="list-none cursor-pointer py-5 px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
                     {/* pv-editable-zone-start:z00210 */}
                       {/* pv-block-start:b00430 */}
                       <span data-pv-block="b00430">Is it really free?</span>
@@ -1322,7 +1430,7 @@ function FAQ(props: any) {
               <details data-pv-block="b00418" className="border-b border-border-secondary group">
                 {/* pv-editable-zone-start:z00206 */}
                   {/* pv-block-start:b00419 */}
-                  <summary data-pv-block="b00419" className="list-none cursor-pointer py-[24px] px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
+                  <summary data-pv-block="b00419" className="list-none cursor-pointer py-5 px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
                     {/* pv-editable-zone-start:z00216 */}
                       {/* pv-block-start:b00442 */}
                       <span data-pv-block="b00442">Who's this for?</span>
@@ -1346,7 +1454,7 @@ function FAQ(props: any) {
               <details data-pv-block="b00403" className="border-b border-border-secondary group">
                 {/* pv-editable-zone-start:z00201 */}
                   {/* pv-block-start:b00404 */}
-                  <summary data-pv-block="b00404" className="list-none cursor-pointer py-[24px] px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
+                  <summary data-pv-block="b00404" className="list-none cursor-pointer flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white py-5 px-4px">
                     {/* pv-editable-zone-start:z00211 */}
                       {/* pv-block-start:b00432 */}
                       <span data-pv-block="b00432">Which AI agents does it work with?</span>
@@ -1370,7 +1478,7 @@ function FAQ(props: any) {
               <details data-pv-block="b00406" className="border-b border-border-secondary group">
                 {/* pv-editable-zone-start:z00202 */}
                   {/* pv-block-start:b00407 */}
-                  <summary data-pv-block="b00407" className="list-none cursor-pointer py-[24px] px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
+                  <summary data-pv-block="b00407" className="list-none cursor-pointer py-5 px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
                     {/* pv-editable-zone-start:z00212 */}
                       {/* pv-block-start:b00434 */}
                       <span data-pv-block="b00434">
@@ -1385,7 +1493,7 @@ function FAQ(props: any) {
                   {/* pv-block-end:b00407 */}
                   {/* pv-block-start:b00408 */}
                   <div data-pv-block="b00408" className="px-[4px] pb-[24px] text-[15.5px] text-foreground-secondary leading-[1.6] max-w-[64ch] text-pretty">
-                    Protovibe runs in your browser, but it's not online. Your computer runs a local server so you can see the website. It reads and writes files on your own drive. You set it up with one terminal script, so you don't have to install Node.js and npm manually.
+                    Protovibe is a local desktop app - it installs all dependencies for you and creates a folder with a boilerplate web app project, specially designed for working with AI agents and design system. This makes a strong foundation for you to continue building a robust prototype. Your computer runs a local server so you can see the website you build. Protovibe only reads and writes files on your own drive.
                   </div>
                   {/* pv-block-end:b00408 */}
                 {/* pv-editable-zone-end:z00202 */}
@@ -1396,7 +1504,7 @@ function FAQ(props: any) {
               <details data-pv-block="b00412" className="border-b border-border-secondary group">
                 {/* pv-editable-zone-start:z00204 */}
                   {/* pv-block-start:b00413 */}
-                  <summary data-pv-block="b00413" className="list-none cursor-pointer py-[24px] px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
+                  <summary data-pv-block="b00413" className="list-none cursor-pointer py-5 px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
                     {/* pv-editable-zone-start:z00214 */}
                       {/* pv-block-start:b00438 */}
                       <span data-pv-block="b00438">Can I bring my own design system?</span>
@@ -1409,18 +1517,66 @@ function FAQ(props: any) {
                   {/* pv-block-end:b00413 */}
                   {/* pv-block-start:b00414 */}
                   <div data-pv-block="b00414" className="px-[4px] pb-[24px] text-[15.5px] text-foreground-secondary leading-[1.6] max-w-[64ch] text-pretty">
-                    Yes, and you should. You can edit tokens manually or ask your coding agent to adapt them to your specs. Spend a couple of hours adjusting the built-in components to match your design system and you're good to go for all future projects.
+                    Yes, and you should. You can just ask your coding agent to port your design system to Protovibe tokens. You can also tweak colours manually. Spend a couple of hours adjusting the built-in components to match your design system and you're good to go for all future projects.
                   </div>
                   {/* pv-block-end:b00414 */}
                 {/* pv-editable-zone-end:z00204 */}
               </details>
               {/* pv-block-end:b00412 */}
 
+              {/* pv-block-start:myv2ny */}
+              <details data-pv-block="myv2ny" className="border-b border-border-secondary group">
+                {/* pv-editable-zone-start:muedsq */}
+                  {/* pv-block-start:79pnth */}
+                  <summary data-pv-block="79pnth" className="list-none cursor-pointer py-5 px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-foreground-default">
+                    {/* pv-editable-zone-start:ur82ju */}
+                      {/* pv-block-start:so12lb */}
+                      <span data-pv-block="so12lb">Why can't I start from a blank canvas?</span>
+                      {/* pv-block-end:so12lb */}
+                      {/* pv-block-start:a5h3zc */}
+                      <Icon data-pv-block="a5h3zc" iconSymbol="chevron-down" size="md" className="text-foreground-primary transition-transform duration-200 group-open:rotate-180 shrink-0" />
+                      {/* pv-block-end:a5h3zc */}
+                    {/* pv-editable-zone-end:ur82ju */}
+                  </summary>
+                  {/* pv-block-end:79pnth */}
+                  {/* pv-block-start:9a546n */}
+                  <div data-pv-block="9a546n" className="px-[4px] pb-[24px] text-[15.5px] text-foreground-secondary leading-[1.6] max-w-[64ch] text-pretty">
+                    Protovibe comes with a default project template to give your agent a solid foundation and examples of how to organize the app. Agents work much better when they have context. If you prefer a clean start, ask your agent to remove the example screens and keep just the component library.
+                  </div>
+                  {/* pv-block-end:9a546n */}
+                {/* pv-editable-zone-end:muedsq */}
+              </details>
+              {/* pv-block-end:myv2ny */}
+
+              {/* pv-block-start:6c5nbn */}
+              <details data-pv-block="6c5nbn" className="border-b border-border-secondary group">
+                {/* pv-editable-zone-start:4jmnim */}
+                  {/* pv-block-start:e3c8e4 */}
+                  <summary data-pv-block="e3c8e4" className="list-none cursor-pointer py-5 px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-foreground-default">
+                    {/* pv-editable-zone-start:m566oy */}
+                      {/* pv-block-start:ifebwh */}
+                      <span data-pv-block="ifebwh">How complex can prototypes get?</span>
+                      {/* pv-block-end:ifebwh */}
+                      {/* pv-block-start:cpqw2n */}
+                      <Icon data-pv-block="cpqw2n" iconSymbol="chevron-down" size="md" className="text-foreground-primary transition-transform duration-200 group-open:rotate-180 shrink-0" />
+                      {/* pv-block-end:cpqw2n */}
+                    {/* pv-editable-zone-end:m566oy */}
+                  </summary>
+                  {/* pv-block-end:e3c8e4 */}
+                  {/* pv-block-start:mayct3 */}
+                  <div data-pv-block="mayct3" className="px-[4px] pb-[24px] text-[15.5px] text-foreground-secondary leading-[1.6] max-w-[64ch] text-pretty">
+                    Very complex — you can build a prototype that almost replicates your whole app. With Protovibe, you don't need to start a new project for every design task. Keep building on one prototype, connecting screens and flows to make usability testing more realistic. Your team can sync changes with Git and build one shared super-prototype together.
+                  </div>
+                  {/* pv-block-end:mayct3 */}
+                {/* pv-editable-zone-end:4jmnim */}
+              </details>
+              {/* pv-block-end:6c5nbn */}
+
               {/* pv-block-start:b00415 */}
               <details data-pv-block="b00415" className="border-b border-border-secondary group">
                 {/* pv-editable-zone-start:z00205 */}
                   {/* pv-block-start:b00416 */}
-                  <summary data-pv-block="b00416" className="list-none cursor-pointer py-[24px] px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
+                  <summary data-pv-block="b00416" className="list-none cursor-pointer py-5 px-[4px] flex items-center justify-between gap-[20px] font-secondary font-bold text-[19px] text-foreground-strong tracking-[-0.01em] transition-colors duration-150 hover:text-white">
                     {/* pv-editable-zone-start:z00215 */}
                       {/* pv-block-start:b00440 */}
                       <span data-pv-block="b00440">
@@ -1940,12 +2096,17 @@ function FooterCTA(props: any) {
           <div data-pv-block="b00272" className="relative z-[2]">
             {/* pv-editable-zone-start:z00096 */}
               {/* pv-block-start:b00273 */}
-              <h2 data-pv-block="b00273" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong max-w-[16ch] mx-auto mb-[40px] text-balance">
+              <h2 data-pv-block="b00273" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong max-w-[16ch] text-balance mb-8 mx-auto">
                 Stop describing pixels.<br /> <span className="text-foreground-primary">
                   Start protovibing.
                 </span>
               </h2>
               {/* pv-block-end:b00273 */}
+              {/* pv-block-start:tdoidq */}
+              <p data-pv-block="tdoidq" className="font-secondary leading-[1.35] tracking-[-0.02em] text-balance font-normal max-w-[640px] my-0 mx-auto text-foreground-default opacity-65 text-2xl">
+                Free open-source alternative to Webflow or Figma Make.
+              </p>
+              {/* pv-block-end:tdoidq */}
               
               {/* pv-block-start:oc6h0r */}
               <div data-pv-block="oc6h0r" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:160ms] flex gap-[12px] mt-[36px] flex-wrap justify-center items-stretch min-w-64 flex-row max-md:flex-col max-md:flex-nowrap max-md:w-full max-md:max-w-[320px] max-md:mx-auto">
@@ -1995,7 +2156,7 @@ function FooterCTA(props: any) {
               {/* pv-block-end:m1uo22 */}
               {/* pv-block-start:b00290 */}
               <div data-pv-block="b00290" className="text-[12px] text-center text-balance md:text-right">
-                © 2026 Protovibe Studio · Made with unreasonable care
+                © 2026 Protovibe Studio · Made with unreasonable care in Poland
               </div>
               {/* pv-block-end:b00290 */}
             {/* pv-editable-zone-end:z00101 */}
@@ -2025,9 +2186,7 @@ function Hero(props: any) {
             {/* pv-block-end:b00305 */}
             {/* pv-block-start:b00306 */}
             <p data-pv-block="b00306" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:80ms] text-[clamp(16px,1.3vw,19px)] text-foreground-default mt-6 mx-auto text-balance max-w-[75ch]">
-              Protovibe Studio is an open-source tool for pro UX/UI designers. <span>
-                Get the power of vibe-coding without losing control over every pixel.
-              </span><br /><br />
+              Protovibe Studio is an open-source desktop app for pro UX/UI designers. <span> Get the power of vibe-coding without losing control over every pixel. </span><br /><br />
             </p>
             {/* pv-block-end:b00306 */}
             {/* pv-block-start:b00307 */}
@@ -2061,11 +2220,14 @@ function Hero(props: any) {
               {/* pv-block-end:b00315 */}
 
               {/* pv-block-start:b00319 */}
-              <div data-pv-block="b00319" className="relative z-10 rounded-lg border-border-default border animate-[hero-rise_700ms_ease-out_backwards] [animation-delay:1320ms]">
+              <div data-pv-block="b00319" className="relative z-10 rounded-lg border-border-default border animate-[hero-rise_1700ms_ease-out_backwards] [animation-delay:320ms]">
                 {/* pv-editable-zone-start:mkz821 */}
                   {/* pv-block-start:mks822 */}
                   <ProtovibeMockup data-pv-block="mks822" />
                   {/* pv-block-end:mks822 */}
+                  {/* pv-block-start:ivhero */}
+                  <HeroIntro data-pv-block="ivhero" />
+                  {/* pv-block-end:ivhero */}
                 {/* pv-editable-zone-end:mkz821 */}
               </div>
               {/* pv-block-end:b00319 */}
@@ -2086,7 +2248,7 @@ function Testimonial(props: any) {
           {/* pv-block-end:b00322 */}
 
           {/* pv-block-start:b00323 */}
-          <div data-pv-block="b00323" className="flex flex-col gap-[32px]">
+          <div data-pv-block="b00323" className="flex flex-col gap-1">
             {/* pv-editable-zone-start:z00114 */}
               {/* pv-block-start:b00324 */}
               <p data-pv-block="b00324" className="font-secondary font-semibold text-[clamp(22px,2.4vw,32px)] leading-[1.35] tracking-[-0.02em] text-foreground-strong m-0">
@@ -2204,9 +2366,6 @@ export default function App() {
             {/* pv-block-end:b00320 */}
 
             {/* Testimonial */}
-            {/* pv-block-start:tm0001 */}
-            <Testimonial data-pv-block="tm0001" />
-            {/* pv-block-end:tm0001 */}
 
             {/* pv-block-start:b00331 */}
             <BYOAgent data-pv-block="b00331" />

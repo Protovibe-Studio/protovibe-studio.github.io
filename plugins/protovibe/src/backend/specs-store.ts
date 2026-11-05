@@ -6,7 +6,7 @@
 //   src/specs/{specId}/spec.json     — document metadata only
 //   src/specs/{specId}/{itemId}.json — one file per annotation / heading
 //
-// One file per mutation keeps git sync's last-write-wins rebase safe (see
+// One file per mutation avoids unnecessary conflicts during git sync (see
 // comments-server.ts for the same reasoning). Undo/redo is handled by the
 // generic snapshot stack: the UI snapshots the exact item file (and anchor
 // source file) it is about to touch, so every spec edit is undoable.
@@ -17,7 +17,7 @@ import type {
   SpecAnnotation, SpecBundle, SpecDoc, SpecHeading, SpecItem, SpecSummary, SpecsViewerData,
 } from '../shared/specs';
 import {
-  SPECS_DIR_REL, SPEC_META_FILE, normalizeHeadingLevel, normalizeSpecStatus,
+  SPECS_DIR_REL, SPEC_META_FILE, normalizeHeadingLevel, normalizeSpecStatus, normalizeSpecWordingStatus,
   sortSpecItems, isAnnotation,
 } from '../shared/specs';
 
@@ -46,10 +46,16 @@ export function itemPath(specId: string, itemId: string): string {
   return path.join(specDir(specId), `${itemId}.json`);
 }
 
-function readJson<T>(p: string): T | null {
+// `unreadable` collects files that exist but do not parse — usually one caught
+// half-written by an agent or a sync — so a polling reader can tell a torn
+// read from the real state on disk.
+function readJson<T>(p: string, unreadable?: string[]): T | null {
+  let text: string;
+  try { text = fs.readFileSync(p, 'utf-8'); } catch { return null; }
   try {
-    return JSON.parse(fs.readFileSync(p, 'utf-8')) as T;
+    return JSON.parse(text) as T;
   } catch {
+    unreadable?.push(path.relative(process.cwd(), p));
     return null;
   }
 }
@@ -72,11 +78,13 @@ function hydrateItem(raw: any, id: string): SpecItem | null {
   }
   if (raw.type === 'annotation') {
     const status = normalizeSpecStatus(raw.status);
+    const wordingStatus = normalizeSpecWordingStatus(raw.wordingStatus);
     const a: SpecAnnotation = {
       ...base,
       type: 'annotation',
       text: String(raw.text ?? ''),
       ...(status ? { status } : {}),
+      ...(wordingStatus ? { wordingStatus } : {}),
       state: { tab: 'app', path: typeof raw.state?.path === 'string' ? raw.state.path : '/' },
       ...(raw.anchor && typeof raw.anchor.file === 'string' ? { anchor: { file: raw.anchor.file } } : {}),
       author: { name: String(raw.author?.name ?? 'Anonymous'), email: String(raw.author?.email ?? '') },
@@ -96,12 +104,12 @@ function hydrateSpec(raw: any, id: string): SpecDoc | null {
   };
 }
 
-export function readSpecMeta(specId: string): SpecDoc | null {
-  return hydrateSpec(readJson(specMetaPath(specId)), specId);
+export function readSpecMeta(specId: string, unreadable?: string[]): SpecDoc | null {
+  return hydrateSpec(readJson(specMetaPath(specId), unreadable), specId);
 }
 
-export function readSpec(specId: string): SpecBundle | null {
-  const spec = readSpecMeta(specId);
+export function readSpec(specId: string, unreadable?: string[]): SpecBundle | null {
+  const spec = readSpecMeta(specId, unreadable);
   // A directory without spec.json (e.g. the spec's creation was undone, or a
   // half-finished sync) is not a spec — its item files are left alone so a
   // redo can bring the document back intact.
@@ -113,7 +121,7 @@ export function readSpec(specId: string): SpecBundle | null {
     if (f === SPEC_META_FILE || !f.endsWith('.json')) continue;
     const id = f.slice(0, -'.json'.length);
     if (!safeSpecId(id)) continue;
-    const item = hydrateItem(readJson(path.join(specDir(specId), f)), id);
+    const item = hydrateItem(readJson(path.join(specDir(specId), f), unreadable), id);
     if (item) items.push(item);
   }
   return { spec, items: sortSpecItems(items) };
@@ -131,18 +139,18 @@ export function listSpecIds(): string[] {
 }
 
 /** Every spec, oldest first (the docs list order). */
-export function readAllSpecs(): SpecBundle[] {
+export function readAllSpecs(unreadable?: string[]): SpecBundle[] {
   const bundles: SpecBundle[] = [];
   for (const id of listSpecIds()) {
-    const b = readSpec(id);
+    const b = readSpec(id, unreadable);
     if (b) bundles.push(b);
   }
   bundles.sort((x, y) => (x.spec.createdAt || '').localeCompare(y.spec.createdAt || '') || x.spec.id.localeCompare(y.spec.id));
   return bundles;
 }
 
-export function listSpecSummaries(): SpecSummary[] {
-  return readAllSpecs().map(({ spec, items }) => ({
+export function listSpecSummaries(unreadable?: string[]): SpecSummary[] {
+  return readAllSpecs(unreadable).map(({ spec, items }) => ({
     ...spec,
     annotationCount: items.filter(isAnnotation).length,
   }));
@@ -166,7 +174,18 @@ export function deleteSpecDir(specId: string): void {
   fs.rmSync(specDir(specId), { recursive: true, force: true });
 }
 
-/** The JSON the published viewer loads (also served live in dev). */
+/**
+ * The JSON the published viewer loads (also served live in dev). The wording
+ * check status is an editor-only workflow field, so it is stripped here.
+ */
 export function buildViewerData(): SpecsViewerData {
-  return { generatedAt: new Date().toISOString(), specs: readAllSpecs() };
+  const specs = readAllSpecs().map((b) => ({
+    ...b,
+    items: b.items.map((it) => {
+      if (!isAnnotation(it) || !it.wordingStatus) return it;
+      const { wordingStatus: _omit, ...rest } = it;
+      return rest;
+    }),
+  }));
+  return { generatedAt: new Date().toISOString(), specs };
 }

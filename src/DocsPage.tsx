@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button';
+import { TextParagraph } from '@/components/ui/text-paragraph';
 import { useState, useEffect } from 'react';
 import { SiteNav } from '@/SiteNav';
 import { InstallModal } from '@/App';
@@ -18,6 +20,14 @@ const SECTION_GROUPS: SectionGroup[] = [
     ],
   },
   {
+    label: 'Design system & components',
+    sections: [
+      { id: 'design-system', title: 'Adjusting the design system' },
+      { id: 'styling-components', title: 'Styling components' },
+      { id: 'creating-components', title: 'Creating new components' },
+    ],
+  },
+  {
     label: 'Editing on the canvas',
     sections: [
       { id: 'shortcuts', title: 'Keyboard shortcuts' },
@@ -25,14 +35,7 @@ const SECTION_GROUPS: SectionGroup[] = [
       { id: 'styling-elements', title: 'Styling individual elements' },
       { id: 'responsive', title: 'Responsive design' },
       { id: 'sketchpad', title: 'Sketchpad' },
-    ],
-  },
-  {
-    label: 'Design system & components',
-    sections: [
-      { id: 'design-system', title: 'Adjusting the design system' },
-      { id: 'styling-components', title: 'Styling components' },
-      { id: 'creating-components', title: 'Creating new components' },
+      { id: 'lo-fi-mode', title: 'Lo-fi mode' },
     ],
   },
   {
@@ -151,7 +154,7 @@ export default function DocsPage() {
       <SiteNav />
 
       <div className="relative z-[2] mx-auto px-[20px] md:px-[40px] max-w-[1340px] grid grid-cols-1 md:grid-cols-[240px_1fr] gap-[40px] md:gap-[60px] py-[40px] md:py-[60px]">
-        <aside className="md:sticky md:top-[80px] self-start">
+        <aside className="md:sticky md:top-[80px] md:max-h-[calc(100dvh-100px)] md:overflow-y-auto md:overscroll-y-contain md:pr-3 self-start">
           <nav className="flex flex-col gap-8">
             {SECTION_GROUPS.map((g) => (
               <div key={g.label} className="flex flex-col gap-[4px]">
@@ -163,7 +166,7 @@ export default function DocsPage() {
                     key={s.id}
                     href={`#${s.id}`}
                     data-active={activeId === s.id}
-                    className="text-[14px] text-foreground-secondary rounded transition-colors hover:text-foreground-strong hover:bg-background-secondary data-[active=true]:text-foreground-strong data-[active=true]:bg-background-secondary data-[active=true]:font-semibold p-1"
+                    className="text-[14px] text-foreground-default rounded transition-colors hover:text-foreground-strong hover:bg-background-secondary data-[active=true]:text-foreground-strong data-[active=true]:bg-background-secondary data-[active=true]:font-semibold p-1"
                   >
                     {s.title}
                   </a>
@@ -321,13 +324,22 @@ export default function DocsPage() {
                   8. When the agent has finished its changes, you can tweak the design manually in the Protovibe editor, or keep iterating with Claude.
                 </p>
                 {/* pv-block-end:57mztv */}
+                {/* pv-block-start:8ccqms */}
+                <a data-pv-block="8ccqms" href="https://example-protovibe-prototype-specs.pages.dev/specs" target="_blank" rel="noopener noreferrer" className="inline-flex self-start max-w-full">
+                  {/* pv-editable-zone-start:xa9707 */}
+                    {/* pv-block-start:85y63h */}
+                    <Button data-pv-block="85y63h" label="Explore example prototype" variant="solid" color="neutral" size="sm" rightIcon="mdi:arrow-top-right" />
+                    {/* pv-block-end:85y63h */}
+                  {/* pv-editable-zone-end:xa9707 */}
+                </a>
+                {/* pv-block-end:8ccqms */}
 
                 {/* pv-block-start:9d0vex */}
                 <div data-pv-block="9d0vex" className="flex flex-col gap-4">
                   {/* pv-editable-zone-start:es0ofe */}
                   {/* pv-block-start:a9x212 */}
                   <h3 data-pv-block="a9x212" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
-                    General advice
+                    General advice for working with agents
                   </h3>
                   {/* pv-block-end:a9x212 */}
                   {/* pv-block-start:bzbvk7 */}
@@ -414,391 +426,6 @@ export default function DocsPage() {
             </section>
             {/* pv-block-end:s4at01 */}
 
-            {/* Keyboard shortcuts */}
-            {/* pv-block-start:s2ks01 */}
-            <section data-pv-block="s2ks01" id="shortcuts" className="flex flex-col gap-[16px] scroll-mt-[80px]">
-              {/* pv-editable-zone-start:z2ks01 */}
-                {/* pv-block-start:h2ks02 */}
-                <h2 data-pv-block="h2ks02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">Keyboard shortcuts</h2>
-                {/* pv-block-end:h2ks02 */}
-                {/* pv-block-start:p2ks03 */}
-                <p data-pv-block="p2ks03" className="text-foreground-secondary leading-[1.7]">
-                  Once you get used to these shortcuts, designing in Protovibe starts to feel like playing a video game — you can add, traverse, and delete elements without ever touching the mouse.
-                </p>
-                {/* pv-block-end:p2ks03 */}
-                {/* pv-block-start:u2ks04 */}
-                <ul data-pv-block="u2ks04" className="flex flex-col gap-[10px] text-foreground-secondary leading-[1.7] list-none p-0 m-0">
-                  {/* pv-editable-zone-start:z2ksu1 */}
-                    {/* pv-block-start:x4g68p */}
-                    <div data-pv-block="x4g68p" className="flex flex-col gap-2 mb-4">
-                      {/* pv-editable-zone-start:mb5b6m */}
-                      {/* pv-block-start:zhzizo */}
-                      <h3 data-pv-block="zhzizo" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
-                        Classic shortcuts
-                      </h3>
-                      {/* pv-block-end:zhzizo */}
-                      {/* pv-block-start:l2ks10 */}
-                      <li data-pv-block="l2ks10"><Shortcut keys={['cmd', 'Z']} /> <Shortcut keys={['cmd', 'shift', 'Z']} /> — undo and redo. Protovibe is editing real files, so undo also rolls back the source.</li>
-                      {/* pv-block-end:l2ks10 */}
-                      {/* pv-block-start:l2ks06 */}
-                      <li data-pv-block="l2ks06"><Shortcut keys={['cmd', 'C']} /> <Shortcut keys={['cmd', 'V']} /> <Shortcut keys={['cmd', 'X']} /> — copy, paste, or cut the selected element. Paste drops the element <em>inside</em> the current selection.</li>
-                      {/* pv-block-end:l2ks06 */}
-                      {/* pv-block-start:l2ks6b */}
-                      <li data-pv-block="l2ks6b"><Shortcut keys={['cmd', 'shift', 'V']} /> — paste <strong className="text-foreground-strong">after</strong> the selected element (as the next sibling). Useful when you want the new element <em>next to</em> the current one rather than inside it.</li>
-                      {/* pv-block-end:l2ks6b */}
-                      {/* pv-block-start:l2ks07 */}
-                      <li data-pv-block="l2ks07"><Shortcut keys={['cmd', 'D']} /> — duplicate the selection in place.</li>
-                      {/* pv-block-end:l2ks07 */}
-                      {/* pv-block-start:tpz88z */}
-                      <li data-pv-block="tpz88z"><Shortcut keys={['Backspace']} /> — delete the selected element.</li>
-                      {/* pv-block-end:tpz88z */}
-                      {/* pv-block-start:tpzaaa */}
-                      <li data-pv-block="tpzaaa"><Shortcut keys={['shift', 'Click']} /> — multi-select elements to delete or wrap them together.</li>
-                      {/* pv-block-end:tpzaaa */}
-                      {/* pv-block-start:wra91x */}
-                      <li data-pv-block="wra91x"><Shortcut keys={['shift', 'A']} /> — wrap the selected elements into a new container. Select multiple elements first with <Shortcut keys={['shift', 'Click']} />, then press <Shortcut keys={['shift', 'A']} /> to group them inside a fresh <InlineCode>div</InlineCode>.</li>
-                      {/* pv-block-end:wra91x */}
-                      {/* pv-block-start:u7i818 */}
-                      <li data-pv-block="u7i818"><Shortcut keys={['[']} /> <Shortcut keys={[']']} /> — move the selected element up or down among its siblings.</li>
-                      {/* pv-block-end:u7i818 */}
-                      {/* pv-block-start:12q9p9 */}
-                      <li data-pv-block="12q9p9"><Shortcut keys={['Space']} /> (hold) — pan the canvas in the Sketchpad.</li>
-                      {/* pv-block-end:12q9p9 */}
-                      {/* pv-editable-zone-end:mb5b6m */}
-                    </div>
-                    {/* pv-block-end:x4g68p */}
-
-                    {/* pv-block-start:lsvjjd */}
-                    <div data-pv-block="lsvjjd" className="flex flex-col gap-2 mb-4">
-                      {/* pv-editable-zone-start:ozc8sa */}
-                      {/* pv-block-start:jdnkn6 */}
-                      <h3 data-pv-block="jdnkn6" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
-                        Navigating the selection
-                      </h3>
-                      {/* pv-block-end:jdnkn6 */}
-                      {/* pv-block-start:l2ks05 */}
-                      <li data-pv-block="l2ks05"><Shortcut keys={['W']} /> <Shortcut keys={['A']} /> <Shortcut keys={['S']} /> <Shortcut keys={['D']} /> — move the selection through the element tree: parent, child, previous, and next.</li>
-                      {/* pv-block-end:l2ks05 */}
-                      {/* pv-editable-zone-end:ozc8sa */}
-                    </div>
-                    {/* pv-block-end:lsvjjd */}
-
-                    {/* pv-block-start:3o6eam */}
-                    <div data-pv-block="3o6eam" className="flex flex-col gap-2">
-                      {/* pv-editable-zone-start:rmp78c */}
-                      {/* pv-block-start:xnh34c */}
-                      <h3 data-pv-block="xnh34c" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
-                        Adding elements with keyboard shortcuts
-                      </h3>
-                      {/* pv-block-end:xnh34c */}
-                      {/* pv-block-start:l2ks7a */}
-                      <li data-pv-block="l2ks7a"><Shortcut keys={['cmd', 'E']} /> — open <strong className="text-foreground-strong">Add element</strong> to insert a new element <em>inside</em> the current selection. Only works when the selected element is a container that allows children (see the note below).</li>
-                      {/* pv-block-end:l2ks7a */}
-                      {/* pv-block-start:l2ks7b */}
-                      <li data-pv-block="l2ks7b"><Shortcut keys={['cmd', 'shift', 'E']} /> — <strong className="text-foreground-strong">Add element after</strong>: insert a new element as the next sibling of the current selection. The fastest way to chain new items in a list or row.</li>
-                      {/* pv-block-end:l2ks7b */}
-                      {/* pv-editable-zone-end:rmp78c */}
-                    </div>
-                    {/* pv-block-end:3o6eam */}
-                  {/* pv-editable-zone-end:z2ksu1 */}
-                </ul>
-                {/* pv-block-end:u2ks04 */}
-              {/* pv-editable-zone-end:z2ks01 */}
-            </section>
-            {/* pv-block-end:s2ks01 */}
-
-            {/* Traversing */}
-            {/* pv-block-start:s5tv01 */}
-            <section data-pv-block="s5tv01" id="traversing" className="flex flex-col gap-[16px] scroll-mt-[80px]">
-              {/* pv-editable-zone-start:z5tv01 */}
-                {/* pv-block-start:h5tv02 */}
-                <h2 data-pv-block="h5tv02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">
-                  Traversing elements
-                </h2>
-                {/* pv-block-end:h5tv02 */}
-                {/* pv-block-start:p5tv03 */}
-                <p data-pv-block="p5tv03" className="text-foreground-secondary leading-[1.7]">
-                  Once something is selected, you almost never need the mouse to navigate. Use <Shortcut keys={['W']} /> <Shortcut keys={['A']} /> <Shortcut keys={['S']} /> <Shortcut keys={['D']} /> to walk through the element tree:
-                </p>
-                {/* pv-block-end:p5tv03 */}
-                {/* pv-block-start:y7do49 */}
-                <Callout data-pv-block="y7do49" variant="info" title="What is traversing?">
-                  Traversing means moving the selection through the element tree with the keyboard instead of clicking. Your page is a nested structure — sections contain rows, rows contain cards, cards contain text. Traversing lets you walk this tree: jump to the parent, dive into a child, hop sideways to the next sibling.
-                </Callout>
-                {/* pv-block-end:y7do49 */}
-                {/* pv-block-start:u5tv04 */}
-                <ul data-pv-block="u5tv04" className="flex flex-col gap-[8px] text-foreground-secondary leading-[1.7] list-none p-0 m-0">
-                  {/* pv-editable-zone-start:z5tvu1 */}
-                    {/* pv-block-start:l5tv05 */}
-                    <li data-pv-block="l5tv05"><Shortcut keys={['W']} /> — go up to the parent (the container that wraps the current element).</li>
-                    {/* pv-block-end:l5tv05 */}
-                    {/* pv-block-start:l5tv06 */}
-                    <li data-pv-block="l5tv06"><Shortcut keys={['S']} /> — go down into the first child.</li>
-                    {/* pv-block-end:l5tv06 */}
-                    {/* pv-block-start:l5tv07 */}
-                    <li data-pv-block="l5tv07"><Shortcut keys={['A']} /> / <Shortcut keys={['D']} /> — move to the previous or next sibling at the same level.</li>
-                    {/* pv-block-end:l5tv07 */}
-                  {/* pv-editable-zone-end:z5tvu1 */}
-                </ul>
-                {/* pv-block-end:u5tv04 */}
-                {/* pv-block-start:p5tv08 */}
-                <p data-pv-block="p5tv08" className="text-foreground-secondary leading-[1.7]">
-                  Example: you've selected a piece of text inside a card. Press <Shortcut keys={['W']} /> to jump to the card itself. Press <Shortcut keys={['D']} /> to hop to the next card in the row. Press <Shortcut keys={['S']} /> to dive into that card's content. It is much faster than aiming with the cursor, especially in dense layouts.
-                </p>
-                {/* pv-block-end:p5tv08 */}
-              {/* pv-editable-zone-end:z5tv01 */}
-            </section>
-            {/* pv-block-end:s5tv01 */}
-
-            {/* Styling individual elements */}
-            {/* pv-block-start:s8se01 */}
-            <section data-pv-block="s8se01" id="styling-elements" className="flex flex-col gap-[16px] scroll-mt-[80px]">
-              {/* pv-editable-zone-start:z8se01 */}
-                {/* pv-block-start:h8se02 */}
-                <h2 data-pv-block="h8se02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">Styling individual elements</h2>
-                {/* pv-block-end:h8se02 */}
-                {/* pv-block-start:p8se03 */}
-                <p data-pv-block="p8se03" className="text-foreground-secondary leading-[1.7]">
-                  Select any element on the canvas and the <strong className="text-foreground-strong">right inspector</strong> opens with everything you can change — layout, spacing, typography, colors, borders, effects. Drag the values, type in numbers, or pick tokens from the dropdown.
-                </p>
-                {/* pv-block-end:p8se03 */}
-                {/* pv-block-start:h8se04 */}
-                <h3 data-pv-block="h8se04" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">When the inspector doesn't have what you need</h3>
-                {/* pv-block-end:h8se04 */}
-                {/* pv-block-start:p8se05 */}
-                <p data-pv-block="p8se05" className="text-foreground-secondary leading-[1.7]">
-                  The inspector intentionally doesn't expose every CSS property. Instead of cluttering the UI with rare features (clip-path, animation timing functions, blend modes…), Protovibe leaves them to your <strong className="text-foreground-strong">coding agent</strong>. Just describe what you want — "make this button shimmer on hover" — and the agent will write the styles for you. You don't need to know the CSS.
-                </p>
-                {/* pv-block-end:p8se05 */}
-                {/* pv-block-start:h8se06 */}
-                <h3 data-pv-block="h8se06" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">The applied classes list</h3>
-                {/* pv-block-end:h8se06 */}
-                {/* pv-block-start:p8se07 */}
-                <p data-pv-block="p8se07" className="text-foreground-secondary leading-[1.7]">
-                  At the bottom of the inspector you'll see the <strong className="text-foreground-strong">list of classes</strong> currently applied to the element. It's the source of truth for what's actually on the DOM. Use it for two things: debugging ("why does this look weird?" — read the classes), and surgical tweaks the visual fields don't cover (you can edit the string directly).
-                </p>
-                {/* pv-block-end:p8se07 */}
-                {/* pv-block-start:owe82u */}
-                <div data-pv-block="owe82u" className="flex flex-col gap-2 items-center">
-                  {/* pv-editable-zone-start:nolfz9 */}
-                  {/* pv-block-start:sgq4xi */}
-                  <div data-pv-block="sgq4xi" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070312.png')] bg-contain bg-center bg-no-repeat aspect-[140/123] w-80" />
-                  {/* pv-block-end:sgq4xi */}
-                  {/* pv-editable-zone-end:nolfz9 */}
-                </div>
-                {/* pv-block-end:owe82u */}
-
-                {/* pv-block-start:h8se08 */}
-                <h3 data-pv-block="h8se08" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">Open in VS Code</h3>
-                {/* pv-block-end:h8se08 */}
-                {/* pv-block-start:p8se09 */}
-                <p data-pv-block="p8se09" className="text-foreground-secondary leading-[1.7]">
-                  Every element header has an <strong className="text-foreground-strong">Open in VS Code</strong> button. It jumps your editor straight to the line of source for the selected element. Most days you won't need it — but when the visual editor gets stuck on something unusual (a tricky conditional, an exotic component), opening the file and editing it directly is always the escape hatch.
-                </p>
-                {/* pv-block-end:p8se09 */}
-                {/* pv-block-start:y92azk */}
-                <div data-pv-block="y92azk" className="flex flex-col gap-2 items-center">
-                  {/* pv-editable-zone-start:6sde38 */}
-                  {/* pv-block-start:jpy9os */}
-                  <div data-pv-block="jpy9os" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070325.png')] bg-contain bg-center bg-no-repeat aspect-[281/214] w-80" />
-                  {/* pv-block-end:jpy9os */}
-                  {/* pv-editable-zone-end:6sde38 */}
-                </div>
-                {/* pv-block-end:y92azk */}
-
-                {/* pv-block-start:h8sh01 */}
-                <h3 data-pv-block="h8sh01" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">Styling hover</h3>
-                {/* pv-block-end:h8sh01 */}
-                {/* pv-block-start:p8sh02 */}
-                <p data-pv-block="p8sh02" className="text-foreground-secondary leading-[1.7]">
-                  By default, anything you change in the inspector applies to the resting state. To style what happens on hover, switch the state first.
-                </p>
-                {/* pv-block-end:p8sh02 */}
-                {/* pv-block-start:5vkh23 */}
-                <div data-pv-block="5vkh23" className="flex flex-col gap-2 items-center">
-                  {/* pv-editable-zone-start:yhrshm */}
-                  {/* pv-block-start:3stvdl */}
-                  <div data-pv-block="3stvdl" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070343.png')] bg-contain bg-center bg-no-repeat aspect-[17/15] w-70" />
-                  {/* pv-block-end:3stvdl */}
-                  {/* pv-editable-zone-end:yhrshm */}
-                </div>
-                {/* pv-block-end:5vkh23 */}
-
-                {/* pv-block-start:o8sh03 */}
-                <ol data-pv-block="o8sh03" className="flex flex-col gap-[8px] text-foreground-secondary leading-[1.7] list-decimal pl-[20px]">
-                  {/* pv-editable-zone-start:z8sh03 */}
-                    {/* pv-block-start:l8sh04 */}
-                    <li data-pv-block="l8sh04">Select the element you want to style.</li>
-                    {/* pv-block-end:l8sh04 */}
-                    {/* pv-block-start:l8sh05 */}
-                    <li data-pv-block="l8sh05">In the inspector, find <strong className="text-foreground-strong">Which state to style</strong> and pick <InlineCode>hover</InlineCode>.</li>
-                    {/* pv-block-end:l8sh05 */}
-                    {/* pv-block-start:l8sh06 */}
-                    <li data-pv-block="l8sh06">Change any style — background, text color, shadow, scale. The new values only apply when the cursor is over the element.</li>
-                    {/* pv-block-end:l8sh06 */}
-                  {/* pv-editable-zone-end:z8sh03 */}
-                </ol>
-                {/* pv-block-end:o8sh03 */}
-                {/* pv-block-start:p8sh07 */}
-                <p data-pv-block="p8sh07" className="text-foreground-secondary leading-[1.7]">
-                  To preview the hover, just move your cursor over the element on the canvas.
-                </p>
-                {/* pv-block-end:p8sh07 */}
-
-                {/* pv-block-start:h8tt01 */}
-                <h3 data-pv-block="h8tt01" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">How to add tooltips</h3>
-                {/* pv-block-end:h8tt01 */}
-                {/* pv-block-start:p8tt02 */}
-                <p data-pv-block="p8tt02" className="text-foreground-secondary leading-[1.7]">
-                  Tooltips are a single field in the inspector sidebar — there's no special component to wrap things in. Select any element, find the <strong className="text-foreground-strong">Tooltip</strong> field, and type the text you want to appear on hover. That's it.
-                </p>
-                {/* pv-block-end:p8tt02 */}
-                {/* pv-block-start:p8tt03 */}
-                <p data-pv-block="p8tt03" className="text-foreground-secondary leading-[1.7]">
-                  Clear the field to remove the tooltip. The tooltip styling matches your design system automatically.
-                </p>
-                {/* pv-block-end:p8tt03 */}
-                {/* pv-block-start:xah8os */}
-                <div data-pv-block="xah8os" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070405.png')] bg-contain bg-center bg-no-repeat aspect-[55/23] w-70 m-auto" />
-                {/* pv-block-end:xah8os */}
-
-                {/* pv-block-start:h8im01 */}
-                <h3 data-pv-block="h8im01" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">Adding images</h3>
-                {/* pv-block-end:h8im01 */}
-                {/* pv-block-start:p8im02 */}
-                <p data-pv-block="p8im02" className="text-foreground-secondary leading-[1.7]">
-                  There are two ways to drop an image onto the canvas, and both end up the same way: as a background image on the selected element.
-                </p>
-                {/* pv-block-end:p8im02 */}
-                {/* pv-block-start:7n3ir7 */}
-                <div data-pv-block="7n3ir7" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070425.png')] bg-contain bg-center bg-no-repeat aspect-[281/225] w-70 m-auto" />
-                {/* pv-block-end:7n3ir7 */}
-                {/* pv-block-start:u8im03 */}
-                <ul data-pv-block="u8im03" className="flex flex-col gap-[8px] text-foreground-secondary leading-[1.7] list-none p-0 m-0">
-                  {/* pv-editable-zone-start:z8im03 */}
-                    {/* pv-block-start:l8im04 */}
-                    <li data-pv-block="l8im04"><strong className="text-foreground-strong">From the inspector</strong> — open the <strong className="text-foreground-strong">Background image</strong> field in the sidebar and pick a file.</li>
-                    {/* pv-block-end:l8im04 */}
-                    {/* pv-block-start:l8im05 */}
-                    <li data-pv-block="l8im05"><strong className="text-foreground-strong">Paste from clipboard</strong> — copy any image (a screenshot, a Figma frame, a PNG from your browser) and hit <Shortcut keys={['cmd', 'V']} /> on the canvas. Protovibe compresses the image automatically and applies it as a background.</li>
-                    {/* pv-block-end:l8im05 */}
-                  {/* pv-editable-zone-end:z8im03 */}
-                </ul>
-                {/* pv-block-end:u8im03 */}
-                {/* pv-block-start:p8im06 */}
-                <p data-pv-block="p8im06" className="text-foreground-secondary leading-[1.7]">
-                  By default, Protovibe sets the size mode to <strong className="text-foreground-strong">Fit</strong> and matches the element's aspect ratio to the image — so it shows the whole picture without cropping or distortion. That's almost always what you want for hero shots, screenshots, and product images.
-                </p>
-                {/* pv-block-end:p8im06 */}
-                {/* pv-block-start:p8im07 */}
-                <p data-pv-block="p8im07" className="text-foreground-secondary leading-[1.7]">
-                  Need something different? Switch the size mode to <strong className="text-foreground-strong">Cover</strong> for a fill-the-frame look (the image will be cropped to fit), or set the aspect ratio manually in the <strong className="text-foreground-strong">Size</strong> panel for full control over the container's shape.
-                </p>
-                {/* pv-block-end:p8im07 */}
-              {/* pv-editable-zone-end:z8se01 */}
-            </section>
-            {/* pv-block-end:s8se01 */}
-
-            {/* Responsive */}
-            {/* pv-block-start:s9rs01 */}
-            <section data-pv-block="s9rs01" id="responsive" className="flex flex-col gap-[16px] scroll-mt-[80px]">
-              {/* pv-editable-zone-start:z9rs01 */}
-                {/* pv-block-start:h9rs02 */}
-                <h2 data-pv-block="h9rs02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">
-                  Mobile preview (RWD)
-                </h2>
-                {/* pv-block-end:h9rs02 */}
-                {/* pv-block-start:p9rs03 */}
-                <p data-pv-block="p9rs03" className="text-foreground-secondary leading-[1.7]">
-                  Protovibe is built on Tailwind, which is <strong className="text-foreground-strong">mobile-first</strong>. That means the styles you set with no breakpoint apply to <em>every</em> screen size, including the smallest. Bigger screens then layer on top.
-                </p>
-                {/* pv-block-end:p9rs03 */}
-                {/* pv-block-start:p9rs04 */}
-                <p data-pv-block="p9rs04" className="text-foreground-secondary leading-[1.7]">
-                  Concretely, to make a grid that's one column on mobile and three columns on desktop:
-                </p>
-                {/* pv-block-end:p9rs04 */}
-                {/* pv-block-start:o9rs05 */}
-                <ol data-pv-block="o9rs05" className="flex flex-col gap-[8px] text-foreground-secondary leading-[1.7] list-decimal pl-[20px]">
-                  {/* pv-editable-zone-start:z9rsu1 */}
-                    {/* pv-block-start:l9rs06 */}
-                    <li data-pv-block="l9rs06">With <strong className="text-foreground-strong">no breakpoint selected</strong>, set the layout to one column. This is your mobile baseline.</li>
-                    {/* pv-block-end:l9rs06 */}
-                    {/* pv-block-start:l9rs07 */}
-                    <li data-pv-block="l9rs07">Open <strong className="text-foreground-strong">Which state to style</strong> and pick <InlineCode>Screen width above</InlineCode> (or whichever breakpoint matches your "tablet up" target).</li>
-                    {/* pv-block-end:l9rs07 */}
-                    {/* pv-block-start:l9rs08 */}
-                    <li data-pv-block="l9rs08">Now change the layout to three columns. This override only kicks in above that width.</li>
-                    {/* pv-block-end:l9rs08 */}
-                  {/* pv-editable-zone-end:z9rsu1 */}
-                </ol>
-                {/* pv-block-end:o9rs05 */}
-                {/* pv-block-start:5sil4x */}
-                <div data-pv-block="5sil4x" className="flex flex-col gap-2 justify-center items-center">
-                  {/* pv-editable-zone-start:1b19hy */}
-                  {/* pv-block-start:ltkx1e */}
-                  <div data-pv-block="ltkx1e" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-071056.png')] bg-contain bg-center bg-no-repeat aspect-[286/245] w-70" />
-                  {/* pv-block-end:ltkx1e */}
-                  {/* pv-editable-zone-end:1b19hy */}
-                </div>
-                {/* pv-block-end:5sil4x */}
-                {/* pv-block-start:p9rs09 */}
-                <p data-pv-block="p9rs09" className="text-foreground-secondary leading-[1.7]">
-                  To preview the small-screen result, click the <strong className="text-foreground-strong">Mobile preview</strong> button above the page. The canvas resizes to a phone-width frame so you can verify the mobile layout without resizing the window. You can also open the preview in a new tab and test it with Chrome's mobile preview.
-                </p>
-                {/* pv-block-end:p9rs09 */}
-                {/* pv-block-start:0o9v1z */}
-                <div data-pv-block="0o9v1z" className="w-full bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070442.png')] bg-contain bg-center bg-no-repeat aspect-[1665/434]" />
-                {/* pv-block-end:0o9v1z */}
-              {/* pv-editable-zone-end:z9rs01 */}
-            </section>
-            {/* pv-block-end:s9rs01 */}
-
-            {/* Sketchpad */}
-            {/* pv-block-start:s7sk01 */}
-            <section data-pv-block="s7sk01" id="sketchpad" className="flex flex-col gap-[16px] scroll-mt-[80px]">
-              {/* pv-editable-zone-start:z7sk01 */}
-                {/* pv-block-start:h7sk02 */}
-                <h2 data-pv-block="h7sk02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">Sketchpad</h2>
-                {/* pv-block-end:h7sk02 */}
-                {/* pv-block-start:p7sk03 */}
-                <p data-pv-block="p7sk03" className="text-foreground-secondary leading-[1.7]">
-                  The Sketchpad is the free-form canvas — closer to Figma than to a browser. Selection rules here are flipped to match what classic design tools do:
-                </p>
-                {/* pv-block-end:p7sk03 */}
-                {/* pv-block-start:ywnwhz */}
-                <div data-pv-block="ywnwhz" className="w-full bg-[url('/src/images/from-protovibe/screenshot-2026-09-17-at-100250.png')] bg-contain bg-center bg-no-repeat aspect-[722/385]" />
-                {/* pv-block-end:ywnwhz */}
-                {/* pv-block-start:zupadf */}
-                <p data-pv-block="zupadf" className="text-foreground-secondary leading-[1.7]">
-                  Use Sketchpad to quickly explore some layouts so you can make a screenshot for your AI agent to rebuild it. Or actually design something by hand and point your coding agent to reuse this in the main App prototype.
-                </p>
-                {/* pv-block-end:zupadf */}
-                {/* pv-block-start:u7sk04 */}
-                <ul data-pv-block="u7sk04" className="flex flex-col gap-[10px] text-foreground-secondary leading-[1.7] list-none p-0 m-0">
-                  {/* pv-editable-zone-start:z7sku1 */}
-                    {/* pv-block-start:l7sk05 */}
-                    <li data-pv-block="l7sk05"><strong className="text-foreground-strong">Single click</strong> selects the top-level frame. <strong className="text-foreground-strong">Double click</strong> drills one level deeper into a child.</li>
-                    {/* pv-block-end:l7sk05 */}
-                    {/* pv-block-start:l7sk06 */}
-                    <li data-pv-block="l7sk06">Hold <Shortcut keys={['cmd']} /> and click to jump straight to the deepest element under the cursor — no double-click chain needed.</li>
-                    {/* pv-block-end:l7sk06 */}
-                    {/* pv-block-start:l7sk07 */}
-                    <li data-pv-block="l7sk07">Hold <Shortcut keys={['Space']} /> to pan the canvas with the mouse.</li>
-                    {/* pv-block-end:l7sk07 */}
-                    {/* pv-block-start:l7sk08 */}
-                    <li data-pv-block="l7sk08">Drag a marquee across empty space to multi-select everything inside the rectangle.</li>
-                    {/* pv-block-end:l7sk08 */}
-                    {/* pv-block-start:l7sk09 */}
-                    <li data-pv-block="l7sk09">Hold <Shortcut keys={['option']} /> (Option / Alt) and drag a selection to duplicate it. The new copy follows the cursor.</li>
-                    {/* pv-block-end:l7sk09 */}
-                  {/* pv-editable-zone-end:z7sku1 */}
-                </ul>
-                {/* pv-block-end:u7sk04 */}
-              {/* pv-editable-zone-end:z7sk01 */}
-            </section>
-            {/* pv-block-end:s7sk01 */}
-
             {/* Adjusting the design system */}
             {/* pv-block-start:s3ds01 */}
             <section data-pv-block="s3ds01" id="design-system" className="flex flex-col gap-[16px] scroll-mt-[80px]">
@@ -807,11 +434,47 @@ export default function DocsPage() {
                 <h2 data-pv-block="h3ds02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">Adjusting the design system</h2>
                 {/* pv-block-end:h3ds02 */}
                 {/* pv-block-start:7eycft */}
-                <InfoBoxBanner showCloseButton={false} data-pv-block="7eycft" icon="Info" heading="Your AI agent can also do it" secondaryText="Just send your color variables and screenshots to your agent and it can adapt the design system for you. Just make sure your follow PROTOVIBE_AGENTS.md rules" color="info" >
+                <InfoBoxBanner showCloseButton={false} data-pv-block="7eycft" icon="Info" heading="Your AI agent can do it!" secondaryText="Just send your color variables and screenshots to your agent and it can adapt the design system for you. Just make sure your follow PROTOVIBE_AGENTS.md rules" color="info" >
                   {/* pv-editable-zone-start:3ekbap */}
                   {/* pv-editable-zone-end:3ekbap */}
                 </InfoBoxBanner>
                 {/* pv-block-end:7eycft */}
+                {/* pv-block-start:nsld6n */}
+                <InfoBoxBanner data-pv-block="nsld6n" showCloseButton={false} icon="mdi:text-box-outline" color="neutral">
+                  {/* pv-editable-zone-start:lv5wzh */}
+                    {/* pv-block-start:oazj4e */}
+                    <TextParagraph data-pv-block="oazj4e" typography="semibold-primary" className="py-2 [overflow-wrap:anywhere]">
+                      Example prompt to bring your design system
+                    </TextParagraph>
+                    {/* pv-block-end:oazj4e */}
+                    {/* pv-block-start:xo4xf6 */}
+                    <TextParagraph data-pv-block="xo4xf6" typography="regular" className="py-2 [overflow-wrap:anywhere]">
+                      Adapt this app’s existing Protovibe design system and component library to visually match NVIDIA Elements: https://github.com/NVIDIA/elements. Use its documentation and component examples as visual references.
+                    </TextParagraph>
+                    {/* pv-block-end:xo4xf6 */}
+                    {/* pv-block-start:4diq8q */}
+                    <TextParagraph data-pv-block="4diq8q" typography="regular" className="py-2 [overflow-wrap:anywhere]">
+                      Before editing, read plugins/protovibe/PROTOVIBE_AGENTS.md in full and inspect the existing tokens in src/index.css and components in src/components/ui/. Keep the Protovibe architecture and React components; port the visual styling rather than replacing them with NVIDIA’s component framework.
+                    </TextParagraph>
+                    {/* pv-block-end:4diq8q */}
+                    {/* pv-block-start:e6e37b */}
+                    <TextParagraph data-pv-block="e6e37b" typography="regular" className="py-2 [overflow-wrap:anywhere]">
+                      Prefer adjusting existing Protovibe semantic tokens for colors, typography, spacing, radii, and borders instead of adding new tokens. Map NVIDIA’s styles to the closest existing tokens and avoid hardcoded colors or duplicate tokens. Add a token only if an essential role cannot be represented, and explain why.
+                    </TextParagraph>
+                    {/* pv-block-end:e6e37b */}
+                    {/* pv-block-start:rzsbgg */}
+                    <TextParagraph data-pv-block="rzsbgg" typography="regular" className="py-2 [overflow-wrap:anywhere]">
+                      Compare buttons, checkboxes, radio buttons, and inputs side by side with NVIDIA Elements. Update their existing variants and default, hover, active, focus, disabled, checked, and error states where applicable. Match their appearance while preserving accessibility and existing behavior.
+                    </TextParagraph>
+                    {/* pv-block-end:rzsbgg */}
+                    {/* pv-block-start:lws7w3 */}
+                    <TextParagraph data-pv-block="lws7w3" typography="regular" className="py-2 [overflow-wrap:anywhere]">
+                      Follow all architectural rules in PROTOVIBE_AGENTS.md: reuse components, preserve pvConfig registrations and granular pv-block/pv-editable-zone tags, use semantic tokens, static Tailwind class strings, and @/ imports. Verify the updated components in the playground and on mobile, run the project checks, and summarize the token mappings and any remaining visual differences.
+                    </TextParagraph>
+                    {/* pv-block-end:lws7w3 */}
+                  {/* pv-editable-zone-end:lv5wzh */}
+                </InfoBoxBanner>
+                {/* pv-block-end:nsld6n */}
                 {/* pv-block-start:p3ds03 */}
                 <p data-pv-block="p3ds03" className="text-foreground-secondary leading-[1.7]">
                   Open the <strong className="text-foreground-strong">Design System</strong> tab to edit your color tokens, radii, fonts, and spacing scale. Changes flow through every component instantly — there are no styles to "republish".
@@ -1208,6 +871,449 @@ export default function DocsPage() {
             </section>
             {/* pv-block-end:scnc01 */}
 
+            {/* Keyboard shortcuts */}
+            {/* pv-block-start:s2ks01 */}
+            <section data-pv-block="s2ks01" id="shortcuts" className="flex flex-col gap-[16px] scroll-mt-[80px]">
+              {/* pv-editable-zone-start:z2ks01 */}
+                {/* pv-block-start:h2ks02 */}
+                <h2 data-pv-block="h2ks02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">Keyboard shortcuts</h2>
+                {/* pv-block-end:h2ks02 */}
+                {/* pv-block-start:p2ks03 */}
+                <p data-pv-block="p2ks03" className="text-foreground-secondary leading-[1.7]">
+                  Once you get used to these shortcuts, designing in Protovibe starts to feel like playing a video game — you can add, traverse, and delete elements without ever touching the mouse.
+                </p>
+                {/* pv-block-end:p2ks03 */}
+                {/* pv-block-start:u2ks04 */}
+                <ul data-pv-block="u2ks04" className="flex flex-col gap-[10px] text-foreground-secondary leading-[1.7] list-none p-0 m-0">
+                  {/* pv-editable-zone-start:z2ksu1 */}
+                    {/* pv-block-start:x4g68p */}
+                    <div data-pv-block="x4g68p" className="flex flex-col gap-2 mb-4">
+                      {/* pv-editable-zone-start:mb5b6m */}
+                      {/* pv-block-start:zhzizo */}
+                      <h3 data-pv-block="zhzizo" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
+                        Classic shortcuts
+                      </h3>
+                      {/* pv-block-end:zhzizo */}
+                      {/* pv-block-start:l2ks10 */}
+                      <li data-pv-block="l2ks10"><Shortcut keys={['cmd', 'Z']} /> <Shortcut keys={['cmd', 'shift', 'Z']} /> — undo and redo. Protovibe is editing real files, so undo also rolls back the source.</li>
+                      {/* pv-block-end:l2ks10 */}
+                      {/* pv-block-start:l2ks06 */}
+                      <li data-pv-block="l2ks06"><Shortcut keys={['cmd', 'C']} /> <Shortcut keys={['cmd', 'V']} /> <Shortcut keys={['cmd', 'X']} /> — copy, paste, or cut the selected element. Paste drops the element <em>inside</em> the current selection.</li>
+                      {/* pv-block-end:l2ks06 */}
+                      {/* pv-block-start:l2ks6b */}
+                      <li data-pv-block="l2ks6b"><Shortcut keys={['cmd', 'shift', 'V']} /> — paste <strong className="text-foreground-strong">after</strong> the selected element (as the next sibling). Useful when you want the new element <em>next to</em> the current one rather than inside it.</li>
+                      {/* pv-block-end:l2ks6b */}
+                      {/* pv-block-start:l2ks07 */}
+                      <li data-pv-block="l2ks07"><Shortcut keys={['cmd', 'D']} /> — duplicate the selection in place.</li>
+                      {/* pv-block-end:l2ks07 */}
+                      {/* pv-block-start:tpz88z */}
+                      <li data-pv-block="tpz88z"><Shortcut keys={['Backspace']} /> — delete the selected element.</li>
+                      {/* pv-block-end:tpz88z */}
+                      {/* pv-block-start:tpzaaa */}
+                      <li data-pv-block="tpzaaa"><Shortcut keys={['shift', 'Click']} /> — multi-select elements to delete or wrap them together.</li>
+                      {/* pv-block-end:tpzaaa */}
+                      {/* pv-block-start:wra91x */}
+                      <li data-pv-block="wra91x"><Shortcut keys={['shift', 'A']} /> — wrap the selected elements into a new container. Select multiple elements first with <Shortcut keys={['shift', 'Click']} />, then press <Shortcut keys={['shift', 'A']} /> to group them inside a fresh <InlineCode>div</InlineCode>.</li>
+                      {/* pv-block-end:wra91x */}
+                      {/* pv-block-start:u7i818 */}
+                      <li data-pv-block="u7i818"><Shortcut keys={['[']} /> <Shortcut keys={[']']} /> — move the selected element up or down among its siblings.</li>
+                      {/* pv-block-end:u7i818 */}
+                      {/* pv-block-start:12q9p9 */}
+                      <li data-pv-block="12q9p9"><Shortcut keys={['Space']} /> (hold) — pan the canvas in the Sketchpad.</li>
+                      {/* pv-block-end:12q9p9 */}
+                      {/* pv-editable-zone-end:mb5b6m */}
+                    </div>
+                    {/* pv-block-end:x4g68p */}
+
+                    {/* pv-block-start:lsvjjd */}
+                    <div data-pv-block="lsvjjd" className="flex flex-col gap-2 mb-4">
+                      {/* pv-editable-zone-start:ozc8sa */}
+                      {/* pv-block-start:jdnkn6 */}
+                      <h3 data-pv-block="jdnkn6" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
+                        Navigating the selection
+                      </h3>
+                      {/* pv-block-end:jdnkn6 */}
+                      {/* pv-block-start:l2ks05 */}
+                      <li data-pv-block="l2ks05"><Shortcut keys={['W']} /> <Shortcut keys={['A']} /> <Shortcut keys={['S']} /> <Shortcut keys={['D']} /> — move the selection through the element tree: parent, child, previous, and next.</li>
+                      {/* pv-block-end:l2ks05 */}
+                      {/* pv-editable-zone-end:ozc8sa */}
+                    </div>
+                    {/* pv-block-end:lsvjjd */}
+
+                    {/* pv-block-start:3o6eam */}
+                    <div data-pv-block="3o6eam" className="flex flex-col gap-2">
+                      {/* pv-editable-zone-start:rmp78c */}
+                      {/* pv-block-start:xnh34c */}
+                      <h3 data-pv-block="xnh34c" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
+                        Adding elements with keyboard shortcuts
+                      </h3>
+                      {/* pv-block-end:xnh34c */}
+                      {/* pv-block-start:l2ks7a */}
+                      <li data-pv-block="l2ks7a"><Shortcut keys={['cmd', 'E']} /> — open <strong className="text-foreground-strong">Add element</strong> to insert a new element <em>inside</em> the current selection. Only works when the selected element is a container that allows children (see the note below).</li>
+                      {/* pv-block-end:l2ks7a */}
+                      {/* pv-block-start:l2ks7b */}
+                      <li data-pv-block="l2ks7b"><Shortcut keys={['cmd', 'shift', 'E']} /> — <strong className="text-foreground-strong">Add element after</strong>: insert a new element as the next sibling of the current selection. The fastest way to chain new items in a list or row.</li>
+                      {/* pv-block-end:l2ks7b */}
+                      {/* pv-editable-zone-end:rmp78c */}
+                    </div>
+                    {/* pv-block-end:3o6eam */}
+                  {/* pv-editable-zone-end:z2ksu1 */}
+                </ul>
+                {/* pv-block-end:u2ks04 */}
+              {/* pv-editable-zone-end:z2ks01 */}
+            </section>
+            {/* pv-block-end:s2ks01 */}
+
+            {/* Traversing */}
+            {/* pv-block-start:s5tv01 */}
+            <section data-pv-block="s5tv01" id="traversing" className="flex flex-col gap-[16px] scroll-mt-[80px]">
+              {/* pv-editable-zone-start:z5tv01 */}
+                {/* pv-block-start:h5tv02 */}
+                <h2 data-pv-block="h5tv02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">
+                  Traversing elements
+                </h2>
+                {/* pv-block-end:h5tv02 */}
+                {/* pv-block-start:p5tv03 */}
+                <p data-pv-block="p5tv03" className="text-foreground-secondary leading-[1.7]">
+                  Once something is selected, you almost never need the mouse to navigate. Use <Shortcut keys={['W']} /> <Shortcut keys={['A']} /> <Shortcut keys={['S']} /> <Shortcut keys={['D']} /> to walk through the element tree:
+                </p>
+                {/* pv-block-end:p5tv03 */}
+                {/* pv-block-start:y7do49 */}
+                <Callout data-pv-block="y7do49" variant="info" title="What is traversing?">
+                  Traversing means moving the selection through the element tree with the keyboard instead of clicking. Your page is a nested structure — sections contain rows, rows contain cards, cards contain text. Traversing lets you walk this tree: jump to the parent, dive into a child, hop sideways to the next sibling.
+                </Callout>
+                {/* pv-block-end:y7do49 */}
+                {/* pv-block-start:u5tv04 */}
+                <ul data-pv-block="u5tv04" className="flex flex-col gap-[8px] text-foreground-secondary leading-[1.7] list-none p-0 m-0">
+                  {/* pv-editable-zone-start:z5tvu1 */}
+                    {/* pv-block-start:l5tv05 */}
+                    <li data-pv-block="l5tv05"><Shortcut keys={['W']} /> — go up to the parent (the container that wraps the current element).</li>
+                    {/* pv-block-end:l5tv05 */}
+                    {/* pv-block-start:l5tv06 */}
+                    <li data-pv-block="l5tv06"><Shortcut keys={['S']} /> — go down into the first child.</li>
+                    {/* pv-block-end:l5tv06 */}
+                    {/* pv-block-start:l5tv07 */}
+                    <li data-pv-block="l5tv07"><Shortcut keys={['A']} /> / <Shortcut keys={['D']} /> — move to the previous or next sibling at the same level.</li>
+                    {/* pv-block-end:l5tv07 */}
+                  {/* pv-editable-zone-end:z5tvu1 */}
+                </ul>
+                {/* pv-block-end:u5tv04 */}
+                {/* pv-block-start:p5tv08 */}
+                <p data-pv-block="p5tv08" className="text-foreground-secondary leading-[1.7]">
+                  Example: you've selected a piece of text inside a card. Press <Shortcut keys={['W']} /> to jump to the card itself. Press <Shortcut keys={['D']} /> to hop to the next card in the row. Press <Shortcut keys={['S']} /> to dive into that card's content. It is much faster than aiming with the cursor, especially in dense layouts.
+                </p>
+                {/* pv-block-end:p5tv08 */}
+              {/* pv-editable-zone-end:z5tv01 */}
+            </section>
+            {/* pv-block-end:s5tv01 */}
+
+            {/* Styling individual elements */}
+            {/* pv-block-start:s8se01 */}
+            <section data-pv-block="s8se01" id="styling-elements" className="flex flex-col gap-[16px] scroll-mt-[80px]">
+              {/* pv-editable-zone-start:z8se01 */}
+                {/* pv-block-start:h8se02 */}
+                <h2 data-pv-block="h8se02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">Styling individual elements</h2>
+                {/* pv-block-end:h8se02 */}
+                {/* pv-block-start:p8se03 */}
+                <p data-pv-block="p8se03" className="text-foreground-secondary leading-[1.7]">
+                  Select any element on the canvas and the <strong className="text-foreground-strong">right inspector</strong> opens with everything you can change — layout, spacing, typography, colors, borders, effects. Drag the values, type in numbers, or pick tokens from the dropdown.
+                </p>
+                {/* pv-block-end:p8se03 */}
+                {/* pv-block-start:h8se04 */}
+                <h3 data-pv-block="h8se04" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">When the inspector doesn't have what you need</h3>
+                {/* pv-block-end:h8se04 */}
+                {/* pv-block-start:p8se05 */}
+                <p data-pv-block="p8se05" className="text-foreground-secondary leading-[1.7]">
+                  The inspector intentionally doesn't expose every CSS property. Instead of cluttering the UI with rare features (clip-path, animation timing functions, blend modes…), Protovibe leaves them to your <strong className="text-foreground-strong">coding agent</strong>. Just describe what you want — "make this button shimmer on hover" — and the agent will write the styles for you. You don't need to know the CSS.
+                </p>
+                {/* pv-block-end:p8se05 */}
+                {/* pv-block-start:h8se06 */}
+                <h3 data-pv-block="h8se06" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">The applied classes list</h3>
+                {/* pv-block-end:h8se06 */}
+                {/* pv-block-start:p8se07 */}
+                <p data-pv-block="p8se07" className="text-foreground-secondary leading-[1.7]">
+                  At the bottom of the inspector you'll see the <strong className="text-foreground-strong">list of classes</strong> currently applied to the element. It's the source of truth for what's actually on the DOM. Use it for two things: debugging ("why does this look weird?" — read the classes), and surgical tweaks the visual fields don't cover (you can edit the string directly).
+                </p>
+                {/* pv-block-end:p8se07 */}
+                {/* pv-block-start:owe82u */}
+                <div data-pv-block="owe82u" className="flex flex-col gap-2 items-center">
+                  {/* pv-editable-zone-start:nolfz9 */}
+                  {/* pv-block-start:sgq4xi */}
+                  <div data-pv-block="sgq4xi" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070312.png')] bg-contain bg-center bg-no-repeat aspect-[140/123] w-80" />
+                  {/* pv-block-end:sgq4xi */}
+                  {/* pv-editable-zone-end:nolfz9 */}
+                </div>
+                {/* pv-block-end:owe82u */}
+
+                {/* pv-block-start:h8se08 */}
+                <h3 data-pv-block="h8se08" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">Open in VS Code</h3>
+                {/* pv-block-end:h8se08 */}
+                {/* pv-block-start:p8se09 */}
+                <p data-pv-block="p8se09" className="text-foreground-secondary leading-[1.7]">
+                  Every element header has an <strong className="text-foreground-strong">Open in VS Code</strong> button. It jumps your editor straight to the line of source for the selected element. Most days you won't need it — but when the visual editor gets stuck on something unusual (a tricky conditional, an exotic component), opening the file and editing it directly is always the escape hatch.
+                </p>
+                {/* pv-block-end:p8se09 */}
+                {/* pv-block-start:y92azk */}
+                <div data-pv-block="y92azk" className="flex flex-col gap-2 items-center">
+                  {/* pv-editable-zone-start:6sde38 */}
+                  {/* pv-block-start:jpy9os */}
+                  <div data-pv-block="jpy9os" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070325.png')] bg-contain bg-center bg-no-repeat aspect-[281/214] w-80" />
+                  {/* pv-block-end:jpy9os */}
+                  {/* pv-editable-zone-end:6sde38 */}
+                </div>
+                {/* pv-block-end:y92azk */}
+
+                {/* pv-block-start:h8sh01 */}
+                <h3 data-pv-block="h8sh01" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">Styling hover</h3>
+                {/* pv-block-end:h8sh01 */}
+                {/* pv-block-start:p8sh02 */}
+                <p data-pv-block="p8sh02" className="text-foreground-secondary leading-[1.7]">
+                  By default, anything you change in the inspector applies to the resting state. To style what happens on hover, switch the state first.
+                </p>
+                {/* pv-block-end:p8sh02 */}
+                {/* pv-block-start:5vkh23 */}
+                <div data-pv-block="5vkh23" className="flex flex-col gap-2 items-center">
+                  {/* pv-editable-zone-start:yhrshm */}
+                  {/* pv-block-start:7n68f8 */}
+                  <div data-pv-block="7n68f8" className="w-full bg-[url('/src/images/from-protovibe/screenshot-2026-11-05-at-104356.png')] bg-contain bg-center bg-no-repeat aspect-[237/154]" />
+                  {/* pv-block-end:7n68f8 */}
+                  {/* pv-editable-zone-end:yhrshm */}
+                </div>
+                {/* pv-block-end:5vkh23 */}
+
+                {/* pv-block-start:o8sh03 */}
+                <ol data-pv-block="o8sh03" className="flex flex-col gap-[8px] text-foreground-secondary leading-[1.7] list-decimal pl-[20px]">
+                  {/* pv-editable-zone-start:z8sh03 */}
+                    {/* pv-block-start:l8sh04 */}
+                    <li data-pv-block="l8sh04">Select the element you want to style.</li>
+                    {/* pv-block-end:l8sh04 */}
+                    {/* pv-block-start:l8sh05 */}
+                    <li data-pv-block="l8sh05">In the inspector, find <strong className="text-foreground-strong">Which state to style</strong> and click + and add new hover state.</li>
+                    {/* pv-block-end:l8sh05 */}
+                    {/* pv-block-start:l8sh06 */}
+                    <li data-pv-block="l8sh06">Change any style — background, text color, shadow, scale. The new values only apply when the cursor is over the element.</li>
+                    {/* pv-block-end:l8sh06 */}
+                  {/* pv-editable-zone-end:z8sh03 */}
+                </ol>
+                {/* pv-block-end:o8sh03 */}
+                {/* pv-block-start:p8sh07 */}
+                <p data-pv-block="p8sh07" className="text-foreground-secondary leading-[1.7]">
+                  To preview the hover, just move your cursor over the element on the canvas.
+                </p>
+                {/* pv-block-end:p8sh07 */}
+
+                {/* pv-block-start:h8tt01 */}
+                <h3 data-pv-block="h8tt01" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">How to add tooltips</h3>
+                {/* pv-block-end:h8tt01 */}
+                {/* pv-block-start:p8tt02 */}
+                <p data-pv-block="p8tt02" className="text-foreground-secondary leading-[1.7]">
+                  Tooltips are a single field in the inspector sidebar — there's no special component to wrap things in. Select any element, find the <strong className="text-foreground-strong">Tooltip</strong> field, and type the text you want to appear on hover. That's it.
+                </p>
+                {/* pv-block-end:p8tt02 */}
+                {/* pv-block-start:p8tt03 */}
+                <p data-pv-block="p8tt03" className="text-foreground-secondary leading-[1.7]">
+                  Clear the field to remove the tooltip. The tooltip styling matches your design system automatically.
+                </p>
+                {/* pv-block-end:p8tt03 */}
+                {/* pv-block-start:xah8os */}
+                <div data-pv-block="xah8os" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070405.png')] bg-contain bg-center bg-no-repeat aspect-[55/23] w-70 m-auto" />
+                {/* pv-block-end:xah8os */}
+
+                {/* pv-block-start:h8im01 */}
+                <h3 data-pv-block="h8im01" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">Adding images</h3>
+                {/* pv-block-end:h8im01 */}
+                {/* pv-block-start:p8im02 */}
+                <p data-pv-block="p8im02" className="text-foreground-secondary leading-[1.7]">
+                  There are two ways to drop an image onto the canvas, and both end up the same way: as a background image on the selected element.
+                </p>
+                {/* pv-block-end:p8im02 */}
+                {/* pv-block-start:7n3ir7 */}
+                <div data-pv-block="7n3ir7" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070425.png')] bg-contain bg-center bg-no-repeat aspect-[281/225] w-70 m-auto" />
+                {/* pv-block-end:7n3ir7 */}
+                {/* pv-block-start:u8im03 */}
+                <ul data-pv-block="u8im03" className="flex flex-col gap-[8px] text-foreground-secondary leading-[1.7] list-none p-0 m-0">
+                  {/* pv-editable-zone-start:z8im03 */}
+                    {/* pv-block-start:l8im04 */}
+                    <li data-pv-block="l8im04"><strong className="text-foreground-strong">From the inspector</strong> — open the <strong className="text-foreground-strong">Background image</strong> field in the sidebar and pick a file.</li>
+                    {/* pv-block-end:l8im04 */}
+                    {/* pv-block-start:l8im05 */}
+                    <li data-pv-block="l8im05"><strong className="text-foreground-strong">Paste from clipboard</strong> — copy any image (a screenshot, a Figma frame, a PNG from your browser) and hit <Shortcut keys={['cmd', 'V']} /> on the canvas. Protovibe compresses the image automatically and applies it as a background.</li>
+                    {/* pv-block-end:l8im05 */}
+                  {/* pv-editable-zone-end:z8im03 */}
+                </ul>
+                {/* pv-block-end:u8im03 */}
+                {/* pv-block-start:p8im06 */}
+                <p data-pv-block="p8im06" className="text-foreground-secondary leading-[1.7]">
+                  By default, Protovibe sets the size mode to <strong className="text-foreground-strong">Fit</strong> and matches the element's aspect ratio to the image — so it shows the whole picture without cropping or distortion. That's almost always what you want for hero shots, screenshots, and product images.
+                </p>
+                {/* pv-block-end:p8im06 */}
+                {/* pv-block-start:p8im07 */}
+                <p data-pv-block="p8im07" className="text-foreground-secondary leading-[1.7]">
+                  Need something different? Switch the size mode to <strong className="text-foreground-strong">Cover</strong> for a fill-the-frame look (the image will be cropped to fit), or set the aspect ratio manually in the <strong className="text-foreground-strong">Size</strong> panel for full control over the container's shape.
+                </p>
+                {/* pv-block-end:p8im07 */}
+              {/* pv-editable-zone-end:z8se01 */}
+            </section>
+            {/* pv-block-end:s8se01 */}
+
+            {/* Responsive */}
+            {/* pv-block-start:s9rs01 */}
+            <section data-pv-block="s9rs01" id="responsive" className="flex flex-col gap-[16px] scroll-mt-[80px]">
+              {/* pv-editable-zone-start:z9rs01 */}
+                {/* pv-block-start:h9rs02 */}
+                <h2 data-pv-block="h9rs02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">
+                  Mobile preview (RWD)
+                </h2>
+                {/* pv-block-end:h9rs02 */}
+                {/* pv-block-start:p9rs03 */}
+                <p data-pv-block="p9rs03" className="text-foreground-secondary leading-[1.7]">
+                  Protovibe is built on Tailwind, which is <strong className="text-foreground-strong">mobile-first</strong>. That means the styles you set with no breakpoint apply to <em>every</em> screen size, including the smallest. Bigger screens then layer on top.
+                </p>
+                {/* pv-block-end:p9rs03 */}
+                {/* pv-block-start:p9rs04 */}
+                <p data-pv-block="p9rs04" className="text-foreground-secondary leading-[1.7]">
+                  Concretely, to make a grid that's one column on mobile and three columns on desktop:
+                </p>
+                {/* pv-block-end:p9rs04 */}
+                {/* pv-block-start:o9rs05 */}
+                <ol data-pv-block="o9rs05" className="flex flex-col gap-[8px] text-foreground-secondary leading-[1.7] list-decimal pl-[20px]">
+                  {/* pv-editable-zone-start:z9rsu1 */}
+                    {/* pv-block-start:l9rs06 */}
+                    <li data-pv-block="l9rs06">With <strong className="text-foreground-strong">no breakpoint selected</strong>, set the layout to one column. This is your mobile baseline.</li>
+                    {/* pv-block-end:l9rs06 */}
+                    {/* pv-block-start:l9rs07 */}
+                    <li data-pv-block="l9rs07">Find <strong className="text-foreground-strong">Which state to style</strong> and add a new state with - <InlineCode>Screen width above - 1024</InlineCode> (or whichever breakpoint matches your "tablet up" target).</li>
+                    {/* pv-block-end:l9rs07 */}
+                    {/* pv-block-start:l9rs08 */}
+                    <li data-pv-block="l9rs08">Now change the layout to three columns. This override only kicks in above that width.</li>
+                    {/* pv-block-end:l9rs08 */}
+                  {/* pv-editable-zone-end:z9rsu1 */}
+                </ol>
+                {/* pv-block-end:o9rs05 */}
+                {/* pv-block-start:5sil4x */}
+                <div data-pv-block="5sil4x" className="flex flex-col gap-2 justify-center items-center">
+                  {/* pv-editable-zone-start:1b19hy */}
+                  {/* pv-block-start:voukwh */}
+                  <div data-pv-block="voukwh" className="bg-[url('/src/images/from-protovibe/screenshot-2026-11-05-at-104658.png')] bg-contain bg-center bg-no-repeat aspect-[153/122] w-70" />
+                  {/* pv-block-end:voukwh */}
+                  {/* pv-editable-zone-end:1b19hy */}
+                </div>
+                {/* pv-block-end:5sil4x */}
+                {/* pv-block-start:p9rs09 */}
+                <p data-pv-block="p9rs09" className="text-foreground-secondary leading-[1.7]">
+                  To preview the small-screen result, click the <strong className="text-foreground-strong">Mobile preview</strong> button above the page. The canvas resizes to a phone-width frame so you can verify the mobile layout without resizing the window. You can also open the preview in a new tab and test it with Chrome's mobile preview.
+                </p>
+                {/* pv-block-end:p9rs09 */}
+                {/* pv-block-start:0o9v1z */}
+                <div data-pv-block="0o9v1z" className="w-full bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070442.png')] bg-contain bg-center bg-no-repeat aspect-[1665/434]" />
+                {/* pv-block-end:0o9v1z */}
+              {/* pv-editable-zone-end:z9rs01 */}
+            </section>
+            {/* pv-block-end:s9rs01 */}
+
+            {/* Sketchpad */}
+            {/* pv-block-start:s7sk01 */}
+            <section data-pv-block="s7sk01" id="sketchpad" className="flex flex-col gap-[16px] scroll-mt-[80px]">
+              {/* pv-editable-zone-start:z7sk01 */}
+                {/* pv-block-start:h7sk02 */}
+                <h2 data-pv-block="h7sk02" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">Sketchpad</h2>
+                {/* pv-block-end:h7sk02 */}
+                {/* pv-block-start:p7sk03 */}
+                <p data-pv-block="p7sk03" className="text-foreground-secondary leading-[1.7]">
+                  The Sketchpad is the free-form canvas — closer to Figma than to a browser. Selection rules here are flipped to match what classic design tools do:
+                </p>
+                {/* pv-block-end:p7sk03 */}
+                {/* pv-block-start:ywnwhz */}
+                <div data-pv-block="ywnwhz" className="w-full bg-[url('/src/images/from-protovibe/screenshot-2026-09-17-at-100250.png')] bg-contain bg-center bg-no-repeat aspect-[722/385]" />
+                {/* pv-block-end:ywnwhz */}
+                {/* pv-block-start:zupadf */}
+                <p data-pv-block="zupadf" className="text-foreground-secondary leading-[1.7]">
+                  Use Sketchpad to quickly explore some layouts so you can make a screenshot for your AI agent to rebuild it. Or actually design something by hand and point your coding agent to reuse this in the main App prototype.
+                </p>
+                {/* pv-block-end:zupadf */}
+                {/* pv-block-start:u7sk04 */}
+                <ul data-pv-block="u7sk04" className="flex flex-col gap-[10px] text-foreground-secondary leading-[1.7] list-none p-0 m-0">
+                  {/* pv-editable-zone-start:z7sku1 */}
+                    {/* pv-block-start:l7sk05 */}
+                    <li data-pv-block="l7sk05"><strong className="text-foreground-strong">Single click</strong> selects the top-level frame. <strong className="text-foreground-strong">Double click</strong> drills one level deeper into a child.</li>
+                    {/* pv-block-end:l7sk05 */}
+                    {/* pv-block-start:l7sk06 */}
+                    <li data-pv-block="l7sk06">Hold <Shortcut keys={['cmd']} /> and click to jump straight to the deepest element under the cursor — no double-click chain needed.</li>
+                    {/* pv-block-end:l7sk06 */}
+                    {/* pv-block-start:l7sk07 */}
+                    <li data-pv-block="l7sk07">Hold <Shortcut keys={['Space']} /> to pan the canvas with the mouse.</li>
+                    {/* pv-block-end:l7sk07 */}
+                    {/* pv-block-start:l7sk08 */}
+                    <li data-pv-block="l7sk08">Drag a marquee across empty space to multi-select everything inside the rectangle.</li>
+                    {/* pv-block-end:l7sk08 */}
+
+                    {/* pv-block-start:l7sk09 */}
+                    <li data-pv-block="l7sk09">Hold <Shortcut keys={['option']} /> (Option / Alt) and drag a selection to duplicate it. The new copy follows the cursor.</li>
+                    {/* pv-block-end:l7sk09 */}
+
+                  {/* pv-editable-zone-end:z7sku1 */}
+                </ul>
+                {/* pv-block-end:u7sk04 */}
+                {/* pv-block-start:m6q8ct */}
+                <h3 data-pv-block="m6q8ct" id="convert-to-sketchpad" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px] scroll-mt-[80px]">
+                  Convert to Sketchpad
+                </h3>
+                {/* pv-block-end:m6q8ct */}
+                {/* pv-block-start:a2k7wv */}
+                <p data-pv-block="a2k7wv" className="text-foreground-secondary leading-[1.7]">
+                  Sometimes you want to explore a different layout for something your agent has built in the App tab. Select the elements you want to work with and choose "Convert to Sketchpad" to turn them into freely editable Sketchpad elements.
+                </p>
+                {/* pv-block-end:a2k7wv */}
+                {/* pv-block-start:t9b4rp */}
+                <p data-pv-block="t9b4rp" className="text-foreground-secondary leading-[1.7]">
+                  Move things around, try different arrangements, and solve layout problems directly on the canvas. Once you find a direction you like, use the sketch as a reference for your coding agent to update the App prototype.
+                </p>
+                {/* pv-block-end:t9b4rp */}
+                {/* pv-block-start:rdb172 */}
+                <div data-pv-block="rdb172" className="w-full bg-[url('/src/images/from-protovibe/image-8.png')] bg-contain bg-center bg-no-repeat aspect-[1512/949]" />
+                {/* pv-block-end:rdb172 */}
+                {/* pv-block-start:pfset4 */}
+                <div data-pv-block="pfset4" className="w-full bg-[url('/src/images/from-protovibe/screenshot-2026-11-05-at-112410.png')] bg-contain bg-center bg-no-repeat aspect-[436/377] max-w-[400px] mx-auto" />
+                {/* pv-block-end:pfset4 */}
+              {/* pv-editable-zone-end:z7sk01 */}
+            </section>
+            {/* pv-block-end:s7sk01 */}
+
+            {/* Lo-fi mode */}
+            {/* pv-block-start:q8f2la */}
+            <section data-pv-block="q8f2la" id="lo-fi-mode" className="flex flex-col gap-[16px] scroll-mt-[80px]">
+              {/* pv-editable-zone-start:n4u9kx */}
+                {/* pv-block-start:teieka */}
+                <h2 data-pv-block="teieka" className="font-secondary font-bold text-[28px] leading-[1.15] tracking-[-0.01em] text-foreground-strong m-0">
+                  Lo-fi mode
+                </h2>
+                {/* pv-block-end:teieka */}
+                {/* pv-block-start:cypgsa */}
+                <p data-pv-block="cypgsa" className="text-foreground-secondary leading-[1.7]">
+                  When you want to focus on usability rather than visual details, switch to Lo-fi mode using the button in the bottom-left corner. It works in both the App tab and Sketchpad. Create low-fidelity sketches, take screenshots, and send them to your coding agent as a reference.
+                </p>
+                {/* pv-block-end:cypgsa */}
+                {/* pv-block-start:8l63nq */}
+                <div data-pv-block="8l63nq" className="w-full bg-[url('/src/images/from-protovibe/lofi-mode.png')] bg-contain bg-center bg-no-repeat aspect-[1763/949]" />
+                {/* pv-block-end:8l63nq */}
+                {/* pv-block-start:p8w3jt */}
+                <p data-pv-block="p8w3jt" className="text-foreground-secondary leading-[1.7]">
+                  You can also publish and share lo-fi prototypes. Just add ?lofi=true to your published prototype URL to open it in Lo-fi mode.
+                </p>
+                {/* pv-block-end:p8w3jt */}
+                {/* pv-block-start:a6v2rm */}
+                <a data-pv-block="a6v2rm" href="https://example-protovibe-prototype-specs.pages.dev/?lofi=true" target="_blank" rel="noopener noreferrer" className="inline-flex self-start max-w-full">
+                  {/* pv-editable-zone-start:xwmg89 */}
+                    {/* pv-block-start:4civ1s */}
+                    <Button data-pv-block="4civ1s" label="Example lo-fi prototype" variant="solid" color="neutral" size="sm" rightIcon="mdi:arrow-top-right" />
+                    {/* pv-block-end:4civ1s */}
+                  {/* pv-editable-zone-end:xwmg89 */}
+                </a>
+                {/* pv-block-end:a6v2rm */}
+              {/* pv-editable-zone-end:n4u9kx */}
+            </section>
+            {/* pv-block-end:q8f2la */}
+
             {/* Publishing */}
             {/* pv-block-start:sbpb01 */}
             <section data-pv-block="sbpb01" id="publishing" className="flex flex-col gap-[16px] scroll-mt-[80px]">
@@ -1227,6 +1333,15 @@ export default function DocsPage() {
                   After the first successful publish you'll get a live URL. Subsequent publishes update the same site in seconds.
                 </p>
                 {/* pv-block-end:pbpb05 */}
+                {/* pv-block-start:oalol3 */}
+                <a data-pv-block="oalol3" href="https://example-protovibe-prototype-specs.pages.dev/specs" target="_blank" rel="noopener noreferrer" className="inline-flex self-start max-w-full">
+                  {/* pv-editable-zone-start:ypyobb */}
+                    {/* pv-block-start:i06otk */}
+                    <Button data-pv-block="i06otk" label="See published example" variant="solid" color="neutral" size="sm" rightIcon="mdi:arrow-top-right" />
+                    {/* pv-block-end:i06otk */}
+                  {/* pv-editable-zone-end:ypyobb */}
+                </a>
+                {/* pv-block-end:oalol3 */}
                 {/* pv-block-start:2pz7m9 */}
                 <div data-pv-block="2pz7m9" className="bg-[url('/src/images/from-protovibe/screenshot-2026-05-03-at-070526.png')] bg-contain bg-center bg-no-repeat aspect-[351/214] w-80 m-auto" />
                 {/* pv-block-end:2pz7m9 */}
@@ -1248,6 +1363,15 @@ export default function DocsPage() {
                 Use the "Specs" tab to write walkthroughs and annotations for your prototype. They're published together with your prototype, so you can send them out to your team.<br />1. Select an element in the app.<br />2. Add an annotation.<br />3. Write it as you would in Notion or any other document editor.<br />4. Publish your prototype and send the "Specs" link to your developers.
               </p>
               {/* pv-block-end:6zsivf */}
+                {/* pv-block-start:gc7qym */}
+                <a data-pv-block="gc7qym" href="https://example-protovibe-prototype-specs.pages.dev/specs" target="_blank" rel="noopener noreferrer" className="inline-flex self-start max-w-full">
+                  {/* pv-editable-zone-start:dygw7k */}
+                    {/* pv-block-start:pa1957 */}
+                    <Button data-pv-block="pa1957" label="See example specs" variant="solid" color="neutral" size="sm" rightIcon="mdi:arrow-top-right" />
+                    {/* pv-block-end:pa1957 */}
+                  {/* pv-editable-zone-end:dygw7k */}
+                </a>
+                {/* pv-block-end:gc7qym */}
               {/* pv-block-start:2gigqv */}
               <div data-pv-block="2gigqv" className="bg-[url('/src/images/from-protovibe/screenshot-2026-09-17-at-092741.png')] bg-contain bg-center bg-no-repeat aspect-[289/670] w-[300px]" />
               {/* pv-block-end:2gigqv */}
@@ -1438,10 +1562,10 @@ export default function DocsPage() {
                 <ul data-pv-block="utrb09" className="flex flex-col gap-[8px] text-foreground-secondary leading-[1.7] list-none p-0 m-0">
                   {/* pv-editable-zone-start:ztrb09 */}
                     {/* pv-block-start:ltrb10 */}
-                    <li data-pv-block="ltrb10">Email us at <a href="mailto:protovibe.studio@gmail.com" className="text-foreground-primary underline">protovibe.studio@gmail.com</a>.</li>
+                    <li data-pv-block="ltrb10">Email us at <a href="mailto:protovibe.studio@gmail.com" className="text-foreground-default underline">protovibe.studio@gmail.com</a>.</li>
                     {/* pv-block-end:ltrb10 */}
                     {/* pv-block-start:ltrb11 */}
-                    <li data-pv-block="ltrb11">Or open an issue on <a href="https://github.com/Protovibe-Studio/protovibe-studio/issues" className="text-foreground-primary underline">GitHub</a>.</li>
+                    <li data-pv-block="ltrb11">Or open an issue on <a href="https://github.com/Protovibe-Studio/protovibe-studio/issues" className="text-foreground-default underline">GitHub</a>.</li>
                     {/* pv-block-end:ltrb11 */}
                   {/* pv-editable-zone-end:ztrb09 */}
                 </ul>
@@ -1464,29 +1588,72 @@ export default function DocsPage() {
                 FAQ
               </h2>
               {/* pv-block-end:xcob5m */}
-              {/* pv-block-start:bqxkkc */}
-              <h3 data-pv-block="bqxkkc" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
-                Why do I need to "run" and "stop" projects?
-              </h3>
-              {/* pv-block-end:bqxkkc */}
-              {/* pv-block-start:gh2ebk */}
-              <p data-pv-block="gh2ebk" className="text-foreground-secondary leading-[1.7]">
-                When you open a project, you need to click the "Run project" button. This starts the whole development environment for you, so you can preview your website in your own browser at localhost:3000. Developers normally do this from a terminal app (command-line interface), but with Protovibe you just hit a button.
-              </p>
-              {/* pv-block-end:gh2ebk */}
-              {/* pv-block-start:se3np5 */}
-              <div data-pv-block="se3np5" className="w-full bg-[url('/src/images/from-protovibe/screenshot-2026-09-17-at-084047.png')] bg-contain bg-center bg-no-repeat aspect-[1061/791]" />
-              {/* pv-block-end:se3np5 */}
-                {/* pv-block-start:q8nfsf */}
-                <h3 data-pv-block="q8nfsf" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
-                  Can I use Protovibe for landing pages?
+                {/* pv-block-start:zho3xa */}
+                <div data-pv-block="zho3xa" className="flex flex-col gap-1">
+                  {/* pv-editable-zone-start:m7na6j */}
+                  {/* pv-block-start:9p6iyt */}
+                  <h3 data-pv-block="9p6iyt" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
+                    Why can't I start from a blank canvas?
+                  </h3>
+                  {/* pv-block-end:9p6iyt */}
+                  {/* pv-block-start:n0fs1d */}
+                  <p data-pv-block="n0fs1d" className="text-foreground-secondary leading-[1.7]">
+                    Protovibe comes with a default project template to give your agent a solid foundation and examples of how to organize the app. Agents work much better when they have context. If you prefer a clean start, ask your agent to remove the example screens and keep just the component library.
+                  </p>
+                  {/* pv-block-end:n0fs1d */}
+                  {/* pv-editable-zone-end:m7na6j */}
+                </div>
+                {/* pv-block-end:zho3xa */}
+                {/* pv-block-start:l5cxgw */}
+                <div data-pv-block="l5cxgw" className="flex flex-col gap-1">
+                  {/* pv-editable-zone-start:y247ii */}
+                  {/* pv-block-start:q8nfsf */}
+                  <h3 data-pv-block="q8nfsf" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
+                    Can I use Protovibe for landing pages?
+                  </h3>
+                  {/* pv-block-end:q8nfsf */}
+                  {/* pv-block-start:adgnhp */}
+                  <p data-pv-block="adgnhp" className="text-foreground-secondary leading-[1.7]">
+                    Yes! Actually this landing page you see now is made in Protovibe. Just ask your coding agent to make a landing page, but still use the design system and components from the default project template.
+                  </p>
+                  {/* pv-block-end:adgnhp */}
+                  {/* pv-editable-zone-end:y247ii */}
+                </div>
+                {/* pv-block-end:l5cxgw */}
+
+                {/* pv-block-start:uwazu0 */}
+                <div data-pv-block="uwazu0" className="flex flex-col gap-1">
+                  {/* pv-editable-zone-start:bb5frf */}
+                  {/* pv-block-start:f3g02n */}
+                  <h3 data-pv-block="f3g02n" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
+                    How complex can prototypes get?
+                  </h3>
+                  {/* pv-block-end:f3g02n */}
+                  {/* pv-block-start:9gh7ev */}
+                  <p data-pv-block="9gh7ev" className="text-foreground-secondary leading-[1.7]">
+                    Very complex — you can build a prototype that almost replicates your whole app. With Protovibe, you don't need to start a new project for every design task. Keep building on one prototype, connecting screens and flows to make usability testing more realistic. Your team can sync changes with Git and build one shared super-prototype together.
+                  </p>
+                  {/* pv-block-end:9gh7ev */}
+                  {/* pv-editable-zone-end:bb5frf */}
+                </div>
+                {/* pv-block-end:uwazu0 */}
+
+              {/* pv-block-start:xfd8h5 */}
+              <div data-pv-block="xfd8h5" className="flex flex-col gap-1">
+                {/* pv-editable-zone-start:r178ur */}
+                {/* pv-block-start:bqxkkc */}
+                <h3 data-pv-block="bqxkkc" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
+                  Why do I need to "start" and "stop" projects?
                 </h3>
-                {/* pv-block-end:q8nfsf */}
-                {/* pv-block-start:adgnhp */}
-                <p data-pv-block="adgnhp" className="text-foreground-secondary leading-[1.7]">
-                  Yes! Actually this landing page you see now is made in Protovibe. Just ask your coding agent to make a landing page, but still use the design system and components from the default project template.
+                {/* pv-block-end:bqxkkc */}
+                {/* pv-block-start:gh2ebk */}
+                <p data-pv-block="gh2ebk" className="text-foreground-secondary leading-[1.7]">
+                  When you open a project, you need to click the "Start designing" button. This launches the whole development environment for you, so you can preview your website in your own browser at localhost:3000. Developers normally do this from a terminal app (command-line interface), but with Protovibe you just hit a button.
                 </p>
-                {/* pv-block-end:adgnhp */}
+                {/* pv-block-end:gh2ebk */}
+                {/* pv-editable-zone-end:r178ur */}
+              </div>
+              {/* pv-block-end:xfd8h5 */}
               {/* pv-editable-zone-end:ciohju */}
             </section>
             {/* pv-block-end:i0sz6q */}
@@ -1521,7 +1688,7 @@ export default function DocsPage() {
                 {/* pv-block-end:cqkp00 */}
                 {/* pv-block-start:pctc06 */}
                 <p data-pv-block="pctc06" className="text-foreground-secondary leading-[1.7]">
-                  The full ruleset for both lives in <InlineCode>PROTOVIBE_AGENTS.md</InlineCode> on GitHub. If you ever ask a coding agent to scaffold or refactor a component, point it at that file — it's the canonical reference. <a href="https://github.com/Protovibe-Studio/protovibe-studio/blob/main/projects/landing-page/plugins/protovibe/PROTOVIBE_AGENTS.md" className="text-foreground-primary underline">Read PROTOVIBE_AGENTS.md →</a>
+                  The full ruleset for both lives in <InlineCode>PROTOVIBE_AGENTS.md</InlineCode> on GitHub. If you ever ask a coding agent to scaffold or refactor a component, point it at that file — it's the canonical reference. <a href="https://github.com/Protovibe-Studio/protovibe-studio/blob/main/projects/landing-page/plugins/protovibe/PROTOVIBE_AGENTS.md" className="text-foreground-default underline">Read PROTOVIBE_AGENTS.md →</a>
                 </p>
                 {/* pv-block-end:pctc06 */}
                 {/* pv-block-start:arb7j1 */}
@@ -1549,12 +1716,12 @@ export default function DocsPage() {
                 {/* pv-block-end:plic03 */}
                 {/* pv-block-start:plic04 */}
                 <p data-pv-block="plic04" className="text-foreground-secondary leading-[1.7]">
-                  The one thing you can't do is embed the Protovibe editor itself inside a commercial web-builder product. If that's what you're after, get in touch about a commercial license at <a href="mailto:protovibe.studio@gmail.com" className="text-foreground-primary underline">protovibe.studio@gmail.com</a>.
+                  The one thing you can't do is embed the Protovibe editor itself inside a commercial web-builder product. If that's what you're after, get in touch about a commercial license at <a href="mailto:protovibe.studio@gmail.com" className="text-foreground-default underline">protovibe.studio@gmail.com</a>.
                 </p>
                 {/* pv-block-end:plic04 */}
                 {/* pv-block-start:plic05 */}
                 <p data-pv-block="plic05" className="text-foreground-secondary leading-[1.7]">
-                  <a href="https://github.com/Protovibe-Studio/protovibe-studio/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" className="text-foreground-primary underline">Read the full license on GitHub →</a>
+                  <a href="https://github.com/Protovibe-Studio/protovibe-studio/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" className="text-foreground-default underline">Read the full license on GitHub →</a>
                 </p>
                 {/* pv-block-end:plic05 */}
               {/* pv-editable-zone-end:zlic01 */}

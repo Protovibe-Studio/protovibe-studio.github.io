@@ -3,22 +3,24 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom';
 import {
   MessageSquarePlus, MessageSquare, ArrowLeft, Trash2, Pencil,
-  CornerDownRight, MapPin, Copy, Check, Search, X, ChevronDown, Filter,
+  CornerDownRight, MapPin, Copy, Check, Search, X, ChevronDown,
   ChevronLeft, ChevronRight,
-  MoreHorizontal, CheckCheck, Eye, EyeOff, Smile, ImagePlus,
+  MoreHorizontal, CheckCheck, Eye, EyeOff, Smile, ImagePlus, RefreshCw,
 } from 'lucide-react';
 import { useProtovibe } from '../context/ProtovibeContext';
 import { theme, primarySolidHover } from '../theme';
 import { takeSnapshot } from '../api/client';
 import {
-  fetchCommentThreads, createCommentThread, replyToThread, editComment,
+  createCommentThread, replyToThread, editComment,
   deleteComment, updateThreadStatus, deleteThread as deleteThreadApi,
   setCommentSeen, markAllCommentsRead, uploadCommentAttachment,
 } from '../api/comments';
 import { emitToast } from '../events/toast';
 import { useCommentUser, authorIsMe, commentSeenByMe, threadHasUnread } from '../hooks/useCommentUser';
 import { useViewportCommentIds } from '../hooks/useViewportCommentIds';
+import { useCommentThreads } from '../hooks/useCommentThreads';
 import { UserProfileDialog } from './comments/UserProfileDialog';
+import { FilterChip, StatusDot, type FilterChipOption } from './FilterChip';
 import { CommentAvatar } from './comments/CommentAvatar';
 import { SuggestionComposerSection, SuggestionToggleButton, SuggestionPreviewBlock, changedSuggestions, clearSuggestionPreviews } from './comments/WordingSuggestions';
 import { getCopySuggestionPreview } from '../utils/copySuggestionPreview';
@@ -71,6 +73,7 @@ const STATUS_CONFIG: Record<CommentStatus, { label: string; color: string }> = {
   minor:  { label: 'Minor',     color: theme.text_tertiary },
   todo:   { label: 'To do',     color: '#A78BFA' }, // purple — no theme token for it
   review: { label: 'To review', color: theme.warning_primary },
+  accepted: { label: 'Accepted', color: theme.accent_default },
   closed: { label: 'Closed',    color: theme.success_default },
 };
 
@@ -139,10 +142,10 @@ function contextSummary(ctx: CommentContext | undefined): string {
   return ctx.pathname ? `App · ${ctx.pathname}` : 'App';
 }
 
-// A filter pill is either a status ('minor'…'closed'), 'none' (untriaged), or one
-// of the cross-cutting toggles. The active pills live in a Set; an empty Set means
-// "All". Status pills OR within their group; the toggles AND on top.
+// The status filter is one pick: a status ('minor'…'closed'), 'none'
+// (untriaged), one of the cross-cutting "Unread" / "Mine" picks, or 'all'.
 type FilterToken = CommentStatus | 'none' | 'unread' | 'mine';
+type StatusFilter = FilterToken | 'all';
 const VALID_TOKENS = new Set<string>([...COMMENT_STATUSES, 'none', 'unread', 'mine']);
 
 // Which elements the thread list is scoped to: every element ('all'), only those
@@ -150,20 +153,12 @@ const VALID_TOKENS = new Set<string>([...COMMENT_STATUSES, 'none', 'unread', 'mi
 // selection's subtree ('selection').
 type FilterScope = 'all' | 'viewport' | 'selection';
 
-// Persisted filter preferences (remembered across sessions). Scope defaults to
-// "Any element"; the pill set defaults to empty ("All").
+// Persisted filter preferences (remembered across sessions). Both default to
+// 'all' (no filtering).
 const FILTER_SCOPE_KEY = 'pv-comments-filter-scope';
 const FILTER_SELECTION_KEY = 'pv-comments-filter-selection'; // legacy boolean scope key (migrated)
 const FILTER_STATUS_KEY = 'pv-comments-filter-status'; // legacy single-status key (migrated)
 const FILTER_TOKENS_KEY = 'pv-comments-filter-tokens';
-const FILTER_OPEN_KEY = 'pv-comments-filter-open'; // remember whether the "Filter comments" panel is expanded
-
-function loadFiltersOpen(): boolean {
-  try {
-    return localStorage.getItem(FILTER_OPEN_KEY) === '1';
-  } catch { /* ignore */ }
-  return false;
-}
 
 function loadFilterScope(): FilterScope {
   try {
@@ -174,18 +169,34 @@ function loadFilterScope(): FilterScope {
   } catch { /* ignore */ }
   return 'all';
 }
-function loadFilterTokens(): Set<FilterToken> {
+function loadStatusFilter(): StatusFilter {
   try {
     const raw = localStorage.getItem(FILTER_TOKENS_KEY);
     if (raw !== null) {
-      return new Set(raw.split(',').filter((t) => VALID_TOKENS.has(t)) as FilterToken[]);
+      // Older builds stored a comma-separated multi-pick; keep its first token.
+      const first = raw.split(',').find((t) => VALID_TOKENS.has(t));
+      return (first as FilterToken | undefined) ?? 'all';
     }
-    // Migrate the old single-status preference into the new pill set.
+    // Migrate the old single-status preference.
     const old = localStorage.getItem(FILTER_STATUS_KEY);
-    if (old && (COMMENT_STATUSES as string[]).includes(old)) return new Set([old as FilterToken]);
+    if (old && (COMMENT_STATUSES as string[]).includes(old)) return old as FilterToken;
   } catch { /* ignore */ }
-  return new Set();
+  return 'all';
 }
+
+const SCOPE_OPTIONS: FilterChipOption<FilterScope>[] = [
+  { value: 'all', label: 'All comments', hint: 'Every comment in the project' },
+  { value: 'viewport', label: 'In view', hint: 'Only comments on elements you can see on the canvas right now' },
+  { value: 'selection', label: 'In selection', hint: 'Only comments on the selected element and what’s inside it' },
+];
+
+const STATUS_OPTIONS: FilterChipOption<StatusFilter>[] = [
+  { value: 'all', label: 'All statuses' },
+  ...COMMENT_STATUSES.map((st) => ({ value: st, label: STATUS_CONFIG[st].label, icon: <StatusDot color={STATUS_CONFIG[st].color} /> })),
+  { value: 'none', label: 'No status', icon: <StatusDot color={theme.text_tertiary} hollow /> },
+  { value: 'unread', label: 'Unread', hint: 'Threads with replies you haven’t read yet', icon: <StatusDot color={theme.accent_default} round />, separator: true },
+  { value: 'mine', label: 'My threads', hint: 'Threads you wrote in or where you’re mentioned', icon: <StatusDot color={theme.accent_default} round hollow /> },
+];
 
 // "My threads" = threads where I authored a comment or my name appears anywhere
 // in the conversation (author names + content), i.e. searching all comments for me.
@@ -211,8 +222,11 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
   } = useProtovibe();
   const { user, saveUser } = useCommentUser();
 
-  const [threads, setThreads] = useState<CommentThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  // Capture the list before opening a thread (and marking its messages read).
+  // Replies, filters and new activity must not move the Next/Prev neighbours.
+  const [navigationIds, setNavigationIds] = useState<string[]>([]);
+  const threadVisit = useRef(0);
   const [composerOpen, setComposerOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [draftAttachments, setDraftAttachments] = useState<PendingAttachment[]>([]);
@@ -227,7 +241,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
   const [editingText, setEditingText] = useState('');
   const [editingSuggestions, setEditingSuggestions] = useState<WordingSuggestion[]>([]);
   const [filterScope, setFilterScope] = useState<FilterScope>(loadFilterScope);
-  const [filterTokens, setFilterTokens] = useState<Set<FilterToken>>(loadFilterTokens);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(loadStatusFilter);
   // Comment ids that were unread when the open thread was entered. Opening a
   // thread marks them all read immediately, so this is captured beforehand only
   // to drive the "scroll to the oldest unread" jump. Cleared when leaving.
@@ -245,22 +259,22 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
   const [profileOpen, setProfileOpen] = useState(false);
   const pendingActionRef = React.useRef<((author: CommentAuthor) => void) | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const next = await fetchCommentThreads();
-      setThreads(next);
-      // Reconcile the live previews against what's now on disk on EVERY refresh,
-      // not just the first. This fires on the initial load, on undo/redo, and —
-      // crucially — after a git sync/pull (via the pv-comments-refresh event) and
-      // after a local edit. A synced or edited suggestion can be added, reworded,
-      // or removed, and the canvas iframe may have reloaded; reconcile prunes gone
-      // previews, follows reworded ones to the new copy, and re-applies them to
-      // the current canvas so the preview never lags behind the saved comment.
-      getCopySuggestionPreview().reconcile(savedSuggestionRefs(next));
-    } catch (e) {
-      setError(String(e));
-    }
-  }, []);
+  const { threads, setThreads, refresh, beginWrite } = useCommentThreads(
+    isActive,
+    next => {
+      const saved = savedSuggestionRefs(next);
+      const current = next.find(t => t.id === activeThreadId);
+      // Draft previews are anchored to the same thread as saved suggestions.
+      // Keep them while composing, but never resurrect a deleted thread/message.
+      if (current) {
+        const drafts = [...replySuggestions,
+          ...(current.comments.some(c => c.id === editingId) ? editingSuggestions : [])];
+        saved.push(...changedSuggestions(drafts).map(s => ({ threadId: current.id, ...s })));
+      }
+      getCopySuggestionPreview().reconcile(saved);
+    },
+    e => setError(String(e)),
+  );
 
   useEffect(() => { refresh(); }, [refresh, activeIframeTab]);
 
@@ -277,8 +291,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
     try { localStorage.setItem(FILTER_SCOPE_KEY, filterScope); } catch { /* ignore */ }
   }, [filterScope]);
   useEffect(() => {
-    try { localStorage.setItem(FILTER_TOKENS_KEY, Array.from(filterTokens).join(',')); } catch { /* ignore */ }
-  }, [filterTokens]);
+    try { localStorage.setItem(FILTER_TOKENS_KEY, statusFilter === 'all' ? '' : statusFilter); } catch { /* ignore */ }
+  }, [statusFilter]);
 
   // Keep in sync after undo/redo of comment files.
   useEffect(() => {
@@ -308,34 +322,12 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
   // on the active surface. Only computes while the "In view" scope is active.
   const viewportIds = useViewportCommentIds(isActive && filterScope === 'viewport', activeIframeTab, threads);
 
-  // Threads read most-recently-active first, but that order is *pinned* while the
-  // panel is open: replying to a thread must not yank it to the top and reshuffle
-  // the list you are stepping through. We keep the id order in a ref and only
-  // extend it — threads not placed yet enter at the top (by activity), deleted
-  // ones fall out, everything else keeps its slot. Re-entering the panel drops the
-  // pin, which is the natural moment for a fresh sort.
-  const orderRef = useRef<string[]>([]);
-  const [orderEpoch, setOrderEpoch] = useState(0);
-  useEffect(() => {
-    if (!isActive) return;
-    orderRef.current = [];
-    setOrderEpoch((n) => n + 1);
-  }, [isActive]);
-
-  const orderedThreads = useMemo(() => {
-    const byActivity = [...threads].sort((a, b) => lastActivity(b) - lastActivity(a));
-    const alive = new Set(byActivity.map((t) => t.id));
-    const placed = new Set(orderRef.current);
-    const order = [
-      ...byActivity.filter((t) => !placed.has(t.id)).map((t) => t.id),
-      ...orderRef.current.filter((id) => alive.has(id)),
-    ];
-    orderRef.current = order;
-    const rank = new Map(order.map((id, i) => [id, i]));
-    return byActivity.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
-    // orderEpoch is the "re-sort from scratch" signal (see the effect above).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threads, orderEpoch]);
+  // The list reflects current activity; navigation gets its own snapshot when
+  // entering a thread and is only recaptured after returning to this list.
+  const orderedThreads = useMemo(
+    () => [...threads].sort((a, b) => lastActivity(b) - lastActivity(a)),
+    [threads],
+  );
 
   const visibleThreads = useMemo(() => {
     const subtreeSet = new Set(subtreeIds);
@@ -345,13 +337,11 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
     } else if (filterScope === 'viewport') {
       base = base.filter((t) => viewportIds.has(t.id));
     }
-    // Status pills (incl. 'none' for untriaged) OR within their own group.
-    const statusSet = new Set([...filterTokens].filter((t) => t === 'none' || (COMMENT_STATUSES as string[]).includes(t)));
-    if (statusSet.size) base = base.filter((t) => statusSet.has(t.status ?? 'none'));
-    if (filterTokens.has('unread')) base = base.filter((t) => threadHasUnread(user, t));
-    if (filterTokens.has('mine')) base = base.filter((t) => threadMentionsMe(user, t));
+    if (statusFilter === 'unread') base = base.filter((t) => threadHasUnread(user, t));
+    else if (statusFilter === 'mine') base = base.filter((t) => threadMentionsMe(user, t));
+    else if (statusFilter !== 'all') base = base.filter((t) => (t.status ?? 'none') === statusFilter);
     return base;
-  }, [orderedThreads, filterScope, currentBaseTarget, subtreeIds, viewportIds, filterTokens, user]);
+  }, [orderedThreads, filterScope, currentBaseTarget, subtreeIds, viewportIds, statusFilter, user]);
 
   // Free-text search runs across every individual comment (not just threads),
   // newest first. A comment matches on its text, its author, or either side of any
@@ -380,6 +370,29 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
   }, [threads, query]);
 
   const activeThread = activeThreadId ? threads.find((t) => t.id === activeThreadId) : undefined;
+
+  // Only accepted snapshots reach this effect: a transient missing file must
+  // not dismiss a thread or erase the reply being composed.
+  useEffect(() => {
+    const threadGone = !!activeThreadId && !activeThread;
+    const editGone = !!editingId && !activeThread?.comments.some(c => c.id === editingId);
+    if (!threadGone && !editGone) return;
+    clearSuggestionPreviews(editingSuggestions, activeThreadId ?? undefined);
+    setEditingId(null);
+    setEditingText('');
+    setEditingSuggestions([]);
+    if (threadGone) {
+      threadVisit.current++;
+      clearSuggestionPreviews(replySuggestions, activeThreadId ?? undefined);
+      replyAttachments.forEach(a => URL.revokeObjectURL(a.previewUrl));
+      setReplyAttachments([]);
+      setReplySuggestions([]);
+      setReplyDraft('');
+      setViewedUnread(new Set());
+      setActiveThreadId(null);
+      emitToast({ message: 'This comment thread was deleted', variant: 'info' });
+    }
+  }, [activeThreadId, activeThread, editingId, editingSuggestions, replySuggestions, replyAttachments]);
 
   // ── profile gate ───────────────────────────────────────────────────────────
   const withAuthor = useCallback((action: (author: CommentAuthor) => void) => {
@@ -457,6 +470,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
       anchorFile: activeData.file,
     };
 
+    const endWrite = beginWrite();
     setBusy(true);
     setError(null);
     runLockedMutation(async () => {
@@ -469,6 +483,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
       if (pending.length) comment.attachments = await uploadPendingAttachments(pending);
       await createCommentThread({ file: activeData.file, nameEnd: activeData.nameEnd, thread });
     }).then(async () => {
+      endWrite();
       await refresh();
       setComposerOpen(false);
       setDraft('');
@@ -487,8 +502,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
       setHighlightId(id);
       setActiveThreadId(null);
       emitToast({ message: 'Comment added', variant: 'success' });
-    }).catch((e) => setError(String(e))).finally(() => setBusy(false));
-  }, [activeData, activeSourceId, buildContext, runLockedMutation, refresh]);
+    }).catch((e) => setError(String(e))).finally(() => { endWrite(); setBusy(false); });
+  }, [activeData, activeSourceId, buildContext, runLockedMutation, refresh, beginWrite]);
 
   // Comment-file-only mutation helper (reply / edit / delete reply / status).
   // Intentionally NOT snapshotted — like read receipts (see setCommentSeen),
@@ -496,21 +511,28 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
   // code history never rewrites or drops a reply, edit, or status change.
   const mutateThreadFile = useCallback(async (
     fn: () => Promise<CommentThread | void>,
+    confirmedDeletions: readonly string[] = [],
   ) => {
+    const endWrite = beginWrite();
     setBusy(true);
     setError(null);
     try {
       await fn();
-      await refresh();
+      endWrite();
+      await refresh(confirmedDeletions);
+      return true;
     } catch (e) {
       setError(String(e));
+      return false;
     } finally {
+      endWrite();
       setBusy(false);
     }
-  }, [refresh]);
+  }, [refresh, beginWrite]);
 
-  const doReply = (thread: CommentThread, text: string, author: CommentAuthor, pending: PendingAttachment[], suggestions: WordingSuggestion[] = []) =>
-    mutateThreadFile(async () => {
+  const doReply = (thread: CommentThread, text: string, author: CommentAuthor, pending: PendingAttachment[], suggestions: WordingSuggestion[] = []) => {
+    const visit = threadVisit.current;
+    return mutateThreadFile(async () => {
       const attachments = pending.length ? await uploadPendingAttachments(pending) : undefined;
       const changedSugg = changedSuggestions(suggestions);
       return replyToThread(thread.id, {
@@ -518,15 +540,26 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
         ...(attachments ? { attachments } : {}),
         ...(changedSugg.length ? { suggestions: changedSugg } : {}),
       });
-    }).then(() => { revokeAttachments(pending); setReplyDraft(''); setReplyAttachments([]); setReplySuggestions([]); });
+    }).then(saved => {
+      if (!saved) return;
+      revokeAttachments(pending);
+      if (visit !== threadVisit.current) return;
+      setReplyDraft(''); setReplyAttachments([]); setReplySuggestions([]);
+    });
+  };
 
   const handleStatus = (thread: CommentThread, status: CommentStatus | null) =>
     mutateThreadFile(() => updateThreadStatus(thread.id, status));
 
-  const handleEditSave = (thread: CommentThread, commentId: string) =>
-    mutateThreadFile(() =>
+  const handleEditSave = (thread: CommentThread, commentId: string) => {
+    const visit = threadVisit.current;
+    return mutateThreadFile(() =>
       editComment(thread.id, commentId, editingText.trim(), changedSuggestions(editingSuggestions)))
-      .then(() => { setEditingId(null); setEditingText(''); setEditingSuggestions([]); });
+      .then(saved => {
+        if (!saved || visit !== threadVisit.current) return;
+        setEditingId(null); setEditingText(''); setEditingSuggestions([]);
+      });
+  };
 
   // A deleted comment takes its live previews with it — otherwise a "Replace all"
   // suggestion would keep rewriting the canvas with no block left to switch it off.
@@ -536,10 +569,12 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
   };
 
   const handleDeleteReply = (thread: CommentThread, commentId: string) =>
-    mutateThreadFile(() => deleteComment(thread.id, commentId))
-      .then(() => dropPreviews(thread.id, thread.comments.find((c) => c.id === commentId)?.suggestions));
+    mutateThreadFile(() => deleteComment(thread.id, commentId), [`${thread.id}/${commentId}`])
+      .then(saved => { if (saved) dropPreviews(thread.id, thread.comments.find((c) => c.id === commentId)?.suggestions); });
 
   const handleDeleteThread = (thread: CommentThread) => {
+    const visit = threadVisit.current;
+    const endWrite = beginWrite();
     setBusy(true);
     setError(null);
     thread.comments.forEach((c) => dropPreviews(thread.id, c.suggestions));
@@ -551,9 +586,10 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
       if (anchor) await takeSnapshot(anchor, activeSourceId || '', undefined, 'delete comment thread');
       await deleteThreadApi(thread.id);
     }).then(async () => {
-      await refresh();
-      setActiveThreadId(null);
-    }).catch((e) => setError(String(e))).finally(() => setBusy(false));
+      endWrite();
+      await refresh([thread.id]);
+      if (visit === threadVisit.current) setActiveThreadId(null);
+    }).catch((e) => setError(String(e))).finally(() => { endWrite(); setBusy(false); });
   };
 
   // ── read receipts ──────────────────────────────────────────────────────────
@@ -563,6 +599,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
   const persistSeen = useCallback((threadId: string, commentId: string | null, seen: boolean) => {
     if (!user) return;
     const name = user.name;
+    const endWrite = beginWrite();
     setThreads((prev) => prev.map((t) => {
       if (t.id !== threadId) return t;
       return {
@@ -575,8 +612,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
         }),
       };
     }));
-    setCommentSeen(threadId, commentId, name, seen).catch(() => refresh());
-  }, [user, refresh]);
+    setCommentSeen(threadId, commentId, name, seen).catch(() => { endWrite(); return refresh(); }).finally(endWrite);
+  }, [user, refresh, beginWrite]);
 
   // Toggle a single comment's read state from the thread view's hover control.
   const handleToggleRead = useCallback((commentId: string, makeRead: boolean) => {
@@ -588,6 +625,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
   const handleMarkAllRead = useCallback(() => {
     withAuthor((author) => {
       const name = author.name;
+      const endWrite = beginWrite();
       setThreads((prev) => prev.map((t) => ({
         ...t,
         comments: t.comments.map((c) => {
@@ -596,13 +634,17 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
         }),
       })));
       setViewedUnread(new Set());
-      markAllCommentsRead(name).catch(() => refresh());
+      markAllCommentsRead(name).catch(() => { endWrite(); return refresh(); }).finally(endWrite);
       emitToast({ message: 'All comments marked as read', variant: 'success' });
     });
-  }, [withAuthor, refresh]);
+  }, [withAuthor, refresh, beginWrite]);
 
   // ── navigation ───────────────────────────────────────────────────────────────
-  const openThread = (thread: CommentThread) => {
+  // `navigate: false` when the thread's element is already on the canvas (a
+  // canvas badge click) — restoring its saved context would only reload it.
+  const openThread = (thread: CommentThread, navigate = true) => {
+    threadVisit.current++;
+    if (activeThreadId === null) setNavigationIds(listNavThreads.map(t => t.id));
     // Capture what's unread now (before we mark it read) for the dots + scroll.
     const unread = thread.comments.filter((c) => !commentSeenByMe(user, c)).map((c) => c.id);
     setViewedUnread(new Set(unread));
@@ -618,14 +660,46 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
     clearSuggestionPreviews(editingSuggestions, activeThreadId ?? undefined);
     setEditingSuggestions([]);
     setActiveThreadId(thread.id);
-    navigateToThread(thread);
+    if (navigate) navigateToThread(thread);
     if (unread.length && user) persistSeen(thread.id, null, true);
   };
 
-  // What the thread view's ‹ › chevrons step through: whatever the list is
-  // showing right now — the search hits (one entry per thread) while searching,
-  // otherwise the filtered thread list, in its pinned order.
-  const navThreads = useMemo(() => {
+  // Canvas badges: while this panel is visible, the canvas draws one badge per
+  // thread pinned to the selected element (see bridge.ts); clicking one opens
+  // that thread. Sent to whichever iframe holds the selection (app or
+  // components); the previous one is cleared when that changes.
+  const badgeIds = useMemo(
+    () => (isActive
+      ? threads.slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map((t) => t.id)
+      : []),
+    [isActive, threads],
+  );
+  const badgeWinRef = useRef<Window | null>(null);
+  useEffect(() => {
+    const win = currentBaseTarget?.ownerDocument?.defaultView ?? null;
+    const prev = badgeWinRef.current;
+    if (prev && prev !== win) prev.postMessage({ type: 'PV_SET_CANVAS_BADGES', kind: 'comment', ids: [], activeId: null }, '*');
+    badgeWinRef.current = win;
+    // Re-sent on selection changes too: a reloaded iframe starts with no ids.
+    win?.postMessage({ type: 'PV_SET_CANVAS_BADGES', kind: 'comment', ids: badgeIds, activeId: activeThreadId }, '*');
+  }, [badgeIds, activeThreadId, currentBaseTarget]);
+  const openThreadRef = useRef(openThread);
+  openThreadRef.current = openThread;
+  useEffect(() => {
+    if (!isActive) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type !== 'PV_CANVAS_BADGE_CLICK' || e.data.kind !== 'comment') return;
+      if (e.data.id === activeThreadId) return;
+      const thread = threads.find((t) => t.id === e.data.id);
+      if (thread) openThreadRef.current(thread, false);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [isActive, threads, activeThreadId]);
+
+  // Candidates for the next browsing session: the displayed list or search
+  // hits, deduplicated because several messages can match in one thread.
+  const listNavThreads = useMemo(() => {
     if (!query.trim()) return visibleThreads;
     const seen = new Set<string>();
     const out: CommentThread[] = [];
@@ -637,8 +711,18 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
     return out;
   }, [query, searchResults, visibleThreads]);
 
-  // -1 when the open thread isn't in the current list (e.g. its element was
-  // deselected under "In selection") — both chevrons then sit disabled.
+  // Freeze only ids/order, not thread contents. Deleted threads are skipped;
+  // newly added threads wait until the user returns to the list and opens one.
+  const navThreads = useMemo(() => {
+    const current = new Map(threads.map(t => [t.id, t]));
+    return navigationIds.flatMap(id => {
+      const thread = current.get(id);
+      return thread ? [thread] : [];
+    });
+  }, [navigationIds, threads]);
+
+  // A canvas badge can open a thread outside the captured list. In that case
+  // both chevrons stay disabled until the user opens a thread from the list.
   const navIndex = activeThreadId ? navThreads.findIndex((t) => t.id === activeThreadId) : -1;
   const stepThread = (delta: number) => {
     const next = navIndex >= 0 ? navThreads[navIndex + delta] : undefined;
@@ -690,6 +774,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
           onMarkAllRead={handleMarkAllRead}
           hasSuggestions={allSuggestions.length > 0}
           onPreviewAll={handlePreviewAll}
+          onRefresh={() => { void refresh(); }}
         />
       )}
 
@@ -724,7 +809,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
           onDeleteReply={(cid) => handleDeleteReply(activeThread, cid)}
           onDeleteThread={() => handleDeleteThread(activeThread)}
           onLocate={() => navigateToThread(activeThread)}
-          onBack={() => setActiveThreadId(null)}
+          onBack={() => { threadVisit.current++; setActiveThreadId(null); }}
           onPrev={navIndex > 0 ? () => stepThread(-1) : undefined}
           onNext={navIndex >= 0 && navIndex < navThreads.length - 1 ? () => stepThread(1) : undefined}
           navPosition={navIndex >= 0 ? { index: navIndex, total: navThreads.length } : undefined}
@@ -751,8 +836,8 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({ activeIframeTab, isAct
           searchResults={searchResults}
           filterScope={filterScope}
           setFilterScope={setFilterScope}
-          filterTokens={filterTokens}
-          setFilterTokens={setFilterTokens}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
           highlightId={highlightId}
           initialScrollTop={listScrollTop.current}
           onScrollChange={(v) => { listScrollTop.current = v; }}
@@ -781,7 +866,8 @@ const Header: React.FC<{
   onMarkAllRead: () => void;
   hasSuggestions: boolean;
   onPreviewAll: (enable: boolean) => void;
-}> = ({ user, onEditProfile, hasUnread, onMarkAllRead, hasSuggestions, onPreviewAll }) => (
+  onRefresh: () => void;
+}> = ({ user, onEditProfile, hasUnread, onMarkAllRead, hasSuggestions, onPreviewAll, onRefresh }) => (
   <div style={{
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     padding: '12px 16px', borderBottom: `1px solid ${theme.border_default}`, flexShrink: 0,
@@ -792,7 +878,7 @@ const Header: React.FC<{
       </span>
     </div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-      <ThreadsMenu hasUnread={hasUnread} onMarkAllRead={onMarkAllRead} hasSuggestions={hasSuggestions} onPreviewAll={onPreviewAll} />
+      <ThreadsMenu hasUnread={hasUnread} onMarkAllRead={onMarkAllRead} hasSuggestions={hasSuggestions} onPreviewAll={onPreviewAll} onRefresh={onRefresh} />
       {user ? (
         <button onClick={onEditProfile} data-tooltip={`${user.name} — edit profile`} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}>
           <CommentAvatar name={user.name} email={user.email} size={24} mine />
@@ -834,13 +920,15 @@ const ThreadsMenuItem: React.FC<{
 // "More" (kebab) menu sitting before the avatar on the threads list. Portaled so
 // the inspector's overflow:hidden doesn't clip it. Holds "Mark all as read"
 // (disabled when there's nothing unread) and the enable/disable-all wording
-// suggestion preview actions (disabled when no thread carries a suggestion).
+// suggestion preview actions (disabled when no thread carries a suggestion),
+// plus a manual refresh of the comments on disk.
 const ThreadsMenu: React.FC<{
   hasUnread: boolean;
   onMarkAllRead: () => void;
   hasSuggestions: boolean;
   onPreviewAll: (enable: boolean) => void;
-}> = ({ hasUnread, onMarkAllRead, hasSuggestions, onPreviewAll }) => {
+  onRefresh: () => void;
+}> = ({ hasUnread, onMarkAllRead, hasSuggestions, onPreviewAll, onRefresh }) => {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -904,6 +992,12 @@ const ThreadsMenu: React.FC<{
               enabled={hasSuggestions}
               onClick={() => { setOpen(false); if (hasSuggestions) onPreviewAll(false); }}
             />
+            <ThreadsMenuItem
+              icon={<RefreshCw size={14} />}
+              label="Refresh comments"
+              enabled
+              onClick={() => { setOpen(false); onRefresh(); }}
+            />
           </div>
         </>,
         document.body,
@@ -934,8 +1028,8 @@ const ListView: React.FC<{
   searchResults: CommentSearchHit[];
   filterScope: FilterScope;
   setFilterScope: (v: FilterScope) => void;
-  filterTokens: Set<FilterToken>;
-  setFilterTokens: (s: Set<FilterToken>) => void;
+  statusFilter: StatusFilter;
+  setStatusFilter: (s: StatusFilter) => void;
   highlightId: string | null;
   initialScrollTop: number;
   onScrollChange: (top: number) => void;
@@ -945,12 +1039,6 @@ const ListView: React.FC<{
   onOpenThread: (t: CommentThread) => void;
 }> = (p) => {
   const searching = p.query.trim().length > 0;
-  const [filtersOpen, setFiltersOpen] = useState(loadFiltersOpen);
-  useEffect(() => {
-    try { localStorage.setItem(FILTER_OPEN_KEY, filtersOpen ? '1' : '0'); } catch { /* ignore */ }
-  }, [filtersOpen]);
-  // Non-default filters worth surfacing on the collapsed "Filters" header.
-  const activeFilters = (searching ? 1 : 0) + p.filterTokens.size + (p.filterScope !== 'all' ? 1 : 0);
   // Restore the threads-list scroll position when coming back from a thread.
   const listRef = useRef<HTMLDivElement>(null);
   const { onScrollChange } = p;
@@ -1001,61 +1089,14 @@ const ListView: React.FC<{
         )}
       </div>
 
-      {/* Search + filters live in a collapsible panel below the Add-comment
-          divider. The status/selection filters are hidden while searching, since
-          search spans every comment regardless of selection or status. */}
-      <div style={{ borderBottom: `1px solid ${theme.border_default}`, flexShrink: 0 }}>
-        <button
-          onClick={() => setFiltersOpen((o) => !o)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 8, width: '100%', minHeight: 36, boxSizing: 'border-box',
-            padding: '9px 16px', border: 'none', background: 'transparent', cursor: 'pointer',
-            color: theme.text_secondary, fontSize: 12, fontWeight: 600, fontFamily: theme.font_ui,
-          }}
-        >
-          <Filter size={14} />
-          <span>Filter comments</span>
-          {activeFilters > 0 && (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              minWidth: 16, height: 16, padding: '0 4px', borderRadius: 999,
-              background: theme.primary_solid, color: '#fff', fontSize: 9, fontWeight: 700,
-            }}>
-              {activeFilters}
-            </span>
-          )}
-          <div style={{ flex: 1 }} />
-          {activeFilters > 0 && (
-            <span
-              role="button"
-              data-tooltip="Clear filters"
-              onClick={(e) => { e.stopPropagation(); p.setFilterTokens(new Set()); p.setFilterScope('all'); p.setQuery(''); }}
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 18, height: 18, borderRadius: 4, color: theme.text_tertiary, cursor: 'pointer' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = theme.bg_low; e.currentTarget.style.color = theme.text_secondary; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = theme.text_tertiary; }}
-            >
-              <X size={13} />
-            </span>
-          )}
-          <ChevronDown size={15} style={{ transform: filtersOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', color: theme.text_tertiary }} />
-        </button>
-        {filtersOpen && (
-          <div style={{ padding: '0 16px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <SearchField value={p.query} onChange={p.setQuery} />
-            {!searching && (
-              <>
-                <Segmented
-                  value={p.filterScope}
-                  onChange={(v) => p.setFilterScope(v as FilterScope)}
-                  options={[
-                    { val: 'all', label: 'All' },
-                    { val: 'viewport', label: 'In view' },
-                    { val: 'selection', label: 'In selection' },
-                  ]}
-                />
-                <FilterPills tokens={p.filterTokens} onChange={p.setFilterTokens} />
-              </>
-            )}
+      {/* Search, then one chip dropdown per filter. The chips are hidden while
+          searching, since search spans every comment regardless of scope or status. */}
+      <div style={{ padding: '10px 16px', borderBottom: `1px solid ${theme.border_default}`, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <SearchField value={p.query} onChange={p.setQuery} />
+        {!searching && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <FilterChip value={p.filterScope} defaultValue="all" options={SCOPE_OPTIONS} onChange={p.setFilterScope} menuWidth={240} testId="comments-filter-scope" />
+            <FilterChip value={p.statusFilter} defaultValue="all" options={STATUS_OPTIONS} onChange={p.setStatusFilter} testId="comments-filter-status" />
           </div>
         )}
       </div>
@@ -1081,12 +1122,12 @@ const ListView: React.FC<{
           )
         ) : p.threads.length === 0 ? (
           <EmptyState text={
-            p.filterTokens.size > 0
+            p.statusFilter !== 'all'
               ? 'No comments match the active filters.'
               : p.filterScope === 'selection'
-                ? (p.hasSelection ? 'No comments on this element yet.' : 'Select an element to see its comments, or switch to Any.')
+                ? (p.hasSelection ? 'No comments on this element yet.' : 'Select an element to see its comments, or switch to All comments.')
                 : p.filterScope === 'viewport'
-                  ? 'No comments are visible in the current view. Scroll the canvas or switch to Any.'
+                  ? 'No comments are visible in the current view. Scroll the canvas or switch to All comments.'
                   : 'No comments yet. Select an element and add the first one.'
           } />
         ) : (
@@ -1133,87 +1174,6 @@ const SearchField: React.FC<{ value: string; onChange: (s: string) => void }> = 
     )}
   </div>
 );
-
-// Inspector-style segmented control (self-contained; no source mutation).
-const Segmented: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-  options: { val: string; label: string }[];
-}> = ({ value, onChange, options }) => (
-  <div style={{ display: 'flex', background: theme.bg_secondary, borderRadius: 4, border: `1px solid ${theme.border_default}`, overflow: 'hidden' }}>
-    {options.map((o, idx) => {
-      const active = value === o.val;
-      return (
-        <React.Fragment key={o.val}>
-          {idx > 0 && <div style={{ width: 1, background: theme.border_default }} />}
-          <button
-            onClick={() => onChange(o.val)}
-            style={{
-              flex: 1, padding: '5px 8px', border: 'none', cursor: 'pointer',
-              background: active ? theme.bg_tertiary : 'transparent',
-              color: active ? theme.accent_default : theme.text_tertiary,
-              fontSize: 11, fontWeight: 600, fontFamily: theme.font_ui,
-              transition: 'background 0.15s, color 0.15s',
-            }}
-          >
-            {o.label}
-          </button>
-        </React.Fragment>
-      );
-    })}
-  </div>
-);
-
-// One toggle pill in the filter bar.
-const FilterPill: React.FC<{
-  active: boolean;
-  color: string;
-  dot?: boolean;
-  round?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}> = ({ active, color, dot, round, onClick, children }) => (
-  <button
-    onClick={onClick}
-    style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999,
-      border: `1px solid ${active ? color : 'transparent'}`,
-      background: active ? `${color}22` : theme.bg_secondary,
-      color: active ? theme.text_default : theme.text_tertiary,
-      fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: theme.font_ui,
-    }}
-  >
-    {dot && <span style={{ width: round ? 6 : 8, height: round ? 6 : 8, borderRadius: round ? '50%' : 2, background: color }} />}
-    {children}
-  </button>
-);
-
-// Multi-select filter bar: "All" (clears everything), the four statuses + "No
-// status", then the cross-cutting "Unread" / "My threads only" toggles. Pills are
-// independently togglable; an empty set is "All".
-const FilterPills: React.FC<{
-  tokens: Set<FilterToken>;
-  onChange: (next: Set<FilterToken>) => void;
-}> = ({ tokens, onChange }) => {
-  const toggle = (t: FilterToken) => {
-    const next = new Set(tokens);
-    if (next.has(t)) next.delete(t); else next.add(t);
-    onChange(next);
-  };
-  return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-      <FilterPill active={tokens.size === 0} color={theme.text_secondary} onClick={() => onChange(new Set())}>All</FilterPill>
-      {COMMENT_STATUSES.map((s) => (
-        <FilterPill key={s} active={tokens.has(s)} color={STATUS_CONFIG[s].color} dot onClick={() => toggle(s)}>
-          {STATUS_CONFIG[s].label}
-        </FilterPill>
-      ))}
-      <FilterPill active={tokens.has('none')} color={theme.text_tertiary} onClick={() => toggle('none')}>No status</FilterPill>
-      <FilterPill active={tokens.has('unread')} color={theme.accent_default} dot round onClick={() => toggle('unread')}>Unread</FilterPill>
-      <FilterPill active={tokens.has('mine')} color={theme.accent_default} onClick={() => toggle('mine')}>My threads only</FilterPill>
-    </div>
-  );
-};
 
 const SearchResultItem: React.FC<{
   hit: CommentSearchHit;
@@ -2235,6 +2195,7 @@ const StepThreadButton: React.FC<{
     <button
       onClick={onClick}
       disabled={!enabled}
+      aria-label={label}
       data-tooltip={enabled ? `${label}${where}` : undefined}
       style={{ ...iconBtnSm, cursor: enabled ? 'pointer' : 'not-allowed', opacity: enabled ? 1 : 0.35 }}
       onMouseEnter={(e) => { if (enabled) e.currentTarget.style.background = theme.bg_low; }}

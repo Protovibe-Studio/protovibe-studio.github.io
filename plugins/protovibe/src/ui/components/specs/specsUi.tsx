@@ -2,12 +2,14 @@
 // Small presentational building blocks shared by the Specs panel: status
 // config + badge + picker, a portal dropdown menu, in-place editable text, and the
 // common button styles. Nothing here talks to the backend.
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { theme } from '../../theme';
 import type { SpecStatus } from '../../../shared/specs';
 import { SPEC_STATUSES, SPEC_STATUS_CONFIG } from '../../../shared/specs';
+
+import { SpecFindText, type SpecFindHighlight } from './SpecFind';
 
 export { SPEC_STATUS_CONFIG };
 
@@ -48,6 +50,8 @@ export interface MenuItem {
   label: string;
   /** Small secondary line under the label (e.g. the path an item acts on). */
   hint?: string;
+  /** The hint is prose, not a path: wrap on word boundaries instead of anywhere. */
+  hintProse?: boolean;
   icon?: React.ReactNode;
   onSelect: () => void;
   danger?: boolean;
@@ -140,7 +144,7 @@ export const Menu: React.FC<{
               {it.icon && <span style={{ display: 'flex', alignItems: 'center', width: 14, flexShrink: 0, opacity: 0.8, marginTop: it.hint ? 2 : 0 }}>{it.icon}</span>}
               <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <span>{it.label}</span>
-                {it.hint && <span title={it.hint} style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', fontSize: 10, fontWeight: 400, color: theme.text_tertiary, wordBreak: 'break-all', lineHeight: 1.35 }}>{it.hint}</span>}
+                {it.hint && <span title={it.hint} style={{ display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden', fontSize: 10, fontWeight: 400, color: theme.text_tertiary, wordBreak: it.hintProse ? 'normal' : 'break-all', lineHeight: 1.35 }}>{it.hint}</span>}
               </span>
               {it.selected && <Check size={13} style={{ color: theme.accent_default }} />}
             </button>
@@ -209,8 +213,20 @@ export const StatusPicker: React.FC<{ status?: SpecStatus; onChange: (s: SpecSta
 export const INLINE_EDITABLE_CLASS = 'pv-spec-inline';
 
 /** Mounted once by the Specs panel; see INLINE_EDITABLE_CLASS. */
+/** Class for elements that fade in on mount (e.g. a row's warning icon). */
+export const SPECS_FADE_IN_CLASS = 'pv-specs-fade-in';
+/**
+ * Hover state for the small icon buttons sitting on a row (⋯, wording check),
+ * so the button reads as its own click target against the row's hover
+ * background. !important because the buttons set their background inline.
+ */
+export const SPECS_ROW_BTN_CLASS = 'pv-specs-row-btn';
+
 export const SpecsInlineStyles: React.FC = () => (
-  <style dangerouslySetInnerHTML={{ __html: `.${INLINE_EDITABLE_CLASS}::placeholder { color: ${theme.text_tertiary}; opacity: 1; }` }} />
+  <style dangerouslySetInnerHTML={{ __html: `.${INLINE_EDITABLE_CLASS}::placeholder { color: ${theme.text_tertiary}; opacity: 1; }
+@keyframes pv-specs-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.${SPECS_FADE_IN_CLASS} { animation: pv-specs-fade-in 0.3s ease-out; }
+.${SPECS_ROW_BTN_CLASS}:hover:not(:disabled), .${SPECS_ROW_BTN_CLASS}[data-open=true] { background: ${theme.bg_tertiary} !important; color: ${theme.text_default} !important; }` }} />
 );
 
 /**
@@ -235,10 +251,20 @@ export const InlineEditable: React.FC<{
   disabled?: boolean;
   /** Select the whole value when focus is requested (typing replaces it). */
   selectAllOnEdit?: boolean;
-}> = ({ value, onSave, placeholder, multiline, style, editing, onEditingChange, disabled, selectAllOnEdit }) => {
+  highlight?: SpecFindHighlight;
+}> = ({ value, onSave, placeholder, multiline, style, editing, onEditingChange, disabled, selectAllOnEdit, highlight }) => {
   const [draft, setDraft] = useState(value);
   const [focused, setFocused] = useState(false);
   const ref = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
+  const highlightRef = useRef<HTMLDivElement | null>(null);
+  const setHighlight = useCallback((el: HTMLDivElement | null) => {
+    highlightRef.current = el;
+    // Restore the field's horizontal position when editing ends.
+    if (el && ref.current) el.scrollLeft = ref.current.scrollLeft;
+  }, []);
+  const syncHighlightScroll = () => {
+    if (highlightRef.current && ref.current) ref.current.scrollLeft = highlightRef.current.scrollLeft;
+  };
   // Escape blurs synchronously, before React flushes setDraft, so the blur
   // handler cannot trust the rendered draft — it reads this instead.
   const draftRef = useRef(value);
@@ -248,13 +274,30 @@ export const InlineEditable: React.FC<{
   // Outside edits (undo, redo, git sync) land while the field is idle.
   useEffect(() => { if (!focused) setBoth(value); }, [value, focused]);
 
-  // The field is always visible, so it must grow instead of scrolling.
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!multiline || !el) return;
+  // The field is always visible, so it must grow instead of scrolling. A
+  // hidden panel (Specs stays mounted under display:none, e.g. straight after
+  // a reload) has nothing to measure, so skip it there and re-measure whenever
+  // the field's width changes — which includes being shown, and panel resizes.
+  const fitHeight = useCallback(() => {
+    const el = ref.current as HTMLTextAreaElement | null;
+    if (!multiline || !el || el.clientWidth === 0) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight + 2}px`;
-  }, [draft, multiline]);
+  }, [multiline]);
+  useLayoutEffect(() => { fitHeight(); }, [draft, fitHeight]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!multiline || !el || typeof ResizeObserver === 'undefined') return;
+    // Only width matters: reacting to height would re-fire on our own resize.
+    let lastWidth = el.clientWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth === lastWidth) return;
+      lastWidth = el.clientWidth;
+      fitHeight();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [multiline, fitHeight]);
 
   useEffect(() => {
     if (!editing) return;
@@ -273,11 +316,15 @@ export const InlineEditable: React.FC<{
     ...style,
   };
 
+  const showHighlight = !focused && !!highlight?.query.trim() && draft.toLowerCase().includes(highlight.query.trim().toLowerCase());
   const shared = {
     className: INLINE_EDITABLE_CLASS,
     value: draft,
     placeholder,
     readOnly: disabled,
+    // Find can scroll the overlay independently. Synchronise before native
+    // caret hit-testing, even if its scroll event has not been delivered yet.
+    onPointerDown: syncHighlightScroll,
     onFocus: () => { setFocused(true); onEditingChange?.(true); },
     onBlur: () => {
       setFocused(false);
@@ -293,6 +340,7 @@ export const InlineEditable: React.FC<{
     style: {
       ...baseStyle,
       background: 'transparent',
+      color: showHighlight ? 'transparent' : baseStyle.color,
       // Transparent rather than none: keeps the box metrics stable.
       border: '1px solid transparent',
       outline: 'none',
@@ -303,7 +351,7 @@ export const InlineEditable: React.FC<{
     },
   };
 
-  return multiline ? (
+  const input = multiline ? (
     <textarea
       ref={ref as React.RefObject<HTMLTextAreaElement>}
       {...shared}
@@ -313,6 +361,20 @@ export const InlineEditable: React.FC<{
   ) : (
     <input ref={ref as React.RefObject<HTMLInputElement>} {...shared} onChange={(e) => setBoth(e.target.value)} />
   );
+  // Keep the real field mounted so clicking highlighted text still places the
+  // caret normally. The overlay shares the field's metrics and scroll position.
+  if (!highlight) return input;
+  return <div style={{ position: 'relative' }}>
+    {input}
+    {showHighlight && <div ref={setHighlight} onScroll={syncHighlightScroll} aria-hidden="true" style={{
+      ...shared.style, position: 'absolute', top: 0, left: 0, height: '100%',
+      // The field's vertical margins collapse through the wrapper. The
+      // positioned overlay must not apply those margins a second time.
+      marginBlock: 0,
+      color: baseStyle.color, pointerEvents: 'none',
+      whiteSpace: multiline ? 'pre-wrap' : 'pre', overflowWrap: 'break-word',
+    }}><SpecFindText text={draft} highlight={highlight} /></div>}
+  </div>;
 };
 
 export function relativeTime(iso: string): string {
