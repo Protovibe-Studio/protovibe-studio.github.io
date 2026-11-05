@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { Connect } from 'vite';
 import { pushUndoSnapshot } from './server';
+import { updateSketchpadElementStyle } from './sketchpad-element-style';
 
 const SKETCHPADS_DIR = path.resolve(process.cwd(), 'src/sketchpads');
 const INDEX_CSS_PATH = path.resolve(process.cwd(), 'src/index.css');
@@ -21,16 +22,8 @@ function nudgeTailwindRescan(): void {
   } catch {}
 }
 
-// Debounce snapshots for high-frequency drag/resize endpoints. A single drag/resize
-// gesture fires N position-update calls in rapid succession; we want one undo step
-// covering the whole gesture. Snapshot only the first call within the window — its
-// content is the pre-gesture state; subsequent skipped snapshots would just capture
-// intermediate states.
-//
-// The window is keyed per element + operation (not per file): moving element A and then
-// element B in the same frame are distinct gestures, so B must still take (and thereby
-// annotate) its own snapshot. Keying by file alone would treat B as a continuation of
-// A's burst and skip it, leaving an un-annotated checkpoint at the top of the stack.
+// Coalesce keyboard nudges into one undo step per element. Pointer drags and
+// resizes send the complete gesture in one request and snapshot independently.
 const recentBurstSnapshots = new Map<string, number>();
 const BURST_SNAPSHOT_WINDOW_MS = 1000;
 
@@ -734,33 +727,24 @@ export const handleFrameUpdatePositionMulti: Connect.NextHandleFunction = async 
 
 export const handleSketchpadUpdateElementPosition: Connect.NextHandleFunction = async (req, res) => {
   try {
-    const { sketchpadId, frameId, blockId, x, y, activeSourceId } = await parseBody(req);
-    if (!sketchpadId || !frameId || !blockId)
+    const { sketchpadId, frameId, blockId, x, y, positions, activeSourceId } = await parseBody(req);
+    if (!sketchpadId || !frameId || (!blockId && !positions?.length))
       return sendError(res, 'sketchpadId, frameId, and blockId required');
 
-    const filePath = path.join(SKETCHPADS_DIR, sketchpadId, `${frameId}.tsx`);
-    if (!fs.existsSync(filePath)) return sendError(res, 'Frame file not found', 404);
-
-    maybeSnapshotForBurst(activeSourceId, path.relative(process.cwd(), filePath), blockId, 'move element');
-    let content = fs.readFileSync(filePath, 'utf-8');
-
-    // Independently update left and top to avoid regex failures if code formatting changes
-    const leftRegex = new RegExp(`(data-pv-sketchpad-el="${blockId}"[^>]*?style=\\{\\{[^}]*?)left:\\s*-?\\d+(?:\\.\\d+)?`);
-    const topRegex = new RegExp(`(data-pv-sketchpad-el="${blockId}"[^>]*?style=\\{\\{[^}]*?)top:\\s*-?\\d+(?:\\.\\d+)?`);
-
-    let updated = false;
-    if (leftRegex.test(content)) {
-      content = content.replace(leftRegex, `$1left: ${Math.round(x)}`);
-      updated = true;
+    const updates = positions ?? [{ blockId, x, y }];
+    const contents = new Map<string, string>();
+    // Validate and prepare every frame before writing or taking a snapshot.
+    // A selection spanning frames is still one user gesture and one Undo.
+    for (const update of updates) {
+      const filePath = path.join(SKETCHPADS_DIR, sketchpadId, `${update.frameId ?? frameId}.tsx`);
+      if (!fs.existsSync(filePath)) return sendError(res, 'Frame file not found', 404);
+      const content = contents.get(filePath) ?? fs.readFileSync(filePath, 'utf-8');
+      contents.set(filePath, updateSketchpadElementStyle(content, update.blockId, { left: update.x, top: update.y }));
     }
-    if (topRegex.test(content)) {
-      content = content.replace(topRegex, `$1top: ${Math.round(y)}`);
-      updated = true;
-    }
-
-    if (updated) {
-      fs.writeFileSync(filePath, content, 'utf-8');
-    }
+    const relPaths = [...contents.keys()].map(filePath => path.relative(process.cwd(), filePath));
+    if (positions) snapshotFiles(activeSourceId, '?tab=sketchpad', 'move elements', ...relPaths);
+    else maybeSnapshotForBurst(activeSourceId, relPaths[0], blockId, 'move element');
+    for (const [filePath, content] of contents) fs.writeFileSync(filePath, content, 'utf-8');
 
     sendJson(res, { success: true });
   } catch (err) {
@@ -770,36 +754,20 @@ export const handleSketchpadUpdateElementPosition: Connect.NextHandleFunction = 
 
 export const handleSketchpadUpdateElementSize: Connect.NextHandleFunction = async (req, res) => {
   try {
-    const { sketchpadId, frameId, blockId, width, height, activeSourceId } = await parseBody(req);
+    const { sketchpadId, frameId, blockId, width, height, x, y, activeSourceId } = await parseBody(req);
     if (!sketchpadId || !frameId || !blockId || (width === undefined && height === undefined))
       return sendError(res, 'sketchpadId, frameId, blockId, and width or height required');
 
     const filePath = path.join(SKETCHPADS_DIR, sketchpadId, `${frameId}.tsx`);
     if (!fs.existsSync(filePath)) return sendError(res, 'Frame file not found', 404);
 
-    maybeSnapshotForBurst(activeSourceId, path.relative(process.cwd(), filePath), blockId, 'resize element');
-    let content = fs.readFileSync(filePath, 'utf-8');
-
-    // Helper to update or insert a dimension in the style object
-    const updateDimension = (dim: 'width' | 'height', value: number) => {
-      const existsRe = new RegExp(
-        `(data-pv-sketchpad-el="${blockId}"[^>]*?style=\\{\\{[^}]*?)${dim}:\\s*\\d+(?:\\.\\d+)?`,
-      );
-      if (existsRe.test(content)) {
-        content = content.replace(existsRe, `$1${dim}: ${Math.round(value)}`);
-      } else {
-        const insertRe = new RegExp(
-          `(data-pv-sketchpad-el="${blockId}"[^>]*?style=\\{\\{[^}]*?position:\\s*'absolute')`,
-        );
-        if (insertRe.test(content)) {
-          content = content.replace(insertRe, `$1, ${dim}: ${Math.round(value)}`);
-        }
-      }
-    };
-
-    if (width !== undefined) updateDimension('width', width);
-    if (height !== undefined) updateDimension('height', height);
-
+    const content = updateSketchpadElementStyle(fs.readFileSync(filePath, 'utf-8'), blockId, {
+      ...(width !== undefined ? { width } : {}),
+      ...(height !== undefined ? { height } : {}),
+      ...(Number.isFinite(x) ? { left: x } : {}),
+      ...(Number.isFinite(y) ? { top: y } : {}),
+    });
+    snapshotFiles(activeSourceId, '?tab=sketchpad', 'resize element', path.relative(process.cwd(), filePath));
     fs.writeFileSync(filePath, content, 'utf-8');
     sendJson(res, { success: true });
   } catch (err) {

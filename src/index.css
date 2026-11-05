@@ -829,13 +829,13 @@ html {
   max-height: none;
   margin: 0;
   border: 0;
-  padding: 80px 20px;
+  padding: 72px 20px 24px;
   background: transparent;
   color: var(--foreground-default);
 }
 .hero-intro-dialog[open] { display: flex; align-items: center; justify-content: center; }
 .hero-intro-dialog::backdrop { background: color-mix(in srgb, var(--background-default) 94%, transparent); }
-.hero-intro-player { width: min(1120px, 100%, calc((100dvh - 160px) * 16 / 9)); aspect-ratio: 16 / 9; }
+.hero-intro-player { width: min(1440px, 100%, calc((100dvh - 96px) * 16 / 9)); aspect-ratio: 16 / 9; }
 @media (prefers-reduced-motion: reduce) {
   .hero-intro-play::after { display: none; }
   .hero-intro-play::before {
