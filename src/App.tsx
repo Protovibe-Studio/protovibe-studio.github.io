@@ -2186,7 +2186,7 @@ function Hero(props: any) {
             {/* pv-block-end:b00305 */}
             {/* pv-block-start:b00306 */}
             <p data-pv-block="b00306" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:80ms] text-[clamp(16px,1.3vw,19px)] text-foreground-default mt-6 mx-auto text-balance max-w-[75ch]">
-              Protovibe Studio is an open-source desktop app for pro UX/UI designers. <span> Get the power of vibe-coding without losing control over every pixel. </span><br /><br />
+              Protovibe Studio is an open-source desktop app for pro UX/UI designers that improves AI workflow. <span> Design directly in React code, with full precision. </span><br /><br />
             </p>
             {/* pv-block-end:b00306 */}
             {/* pv-block-start:b00307 */}
