@@ -585,7 +585,7 @@ function BYOAgent(props: any) {
             {/* pv-editable-zone-start:z00016 */}
               {/* pv-block-start:b00058 */}
               <h2 data-pv-block="b00058" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong m-0 text-balance">
-                Superpower your vibe-coding
+                Superpower your agent
               </h2>
               {/* pv-block-end:b00058 */}
               {/* pv-block-start:b00059 */}
@@ -991,7 +991,7 @@ function ProblemSolution(props: any) {
               {/* pv-block-end:b00126 */}
               {/* pv-block-start:b00127 */}
               <h2 data-pv-block="b00127" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong m-0 text-balance">
-                Protovibe solves problems with AI workflows
+                Protovibe solves vibe‑coding problems
               </h2>
               {/* pv-block-end:b00127 */}
               {/* pv-block-start:b00128 */}
@@ -1033,7 +1033,7 @@ function ProblemSolution(props: any) {
                           {/* pv-block-end:b00205 */}
                           {/* pv-block-start:b00206 */}
                           <p data-pv-block="b00206" className="text-[14.5px] text-foreground-secondary m-0 leading-[1.55] max-w-[52ch] text-pretty">
-                            Tools like Figma Make or Google AI Studio are not really design tools. No undo. No sliders. No color picker. No way to quickly explore options. You can't feel design through a text box.
+                            Tools like Figma Make or Google AI Studio are not really design tools. No fast undo. No sliders. No color picker. No way to quickly explore options. You can't feel design through a text box.
                           </p>
                           {/* pv-block-end:b00206 */}
                         {/* pv-editable-zone-end:z00068 */}
@@ -1331,7 +1331,7 @@ function ProblemSolution(props: any) {
                     {/* pv-editable-zone-start:yjtsyl */}
                       {/* pv-block-start:7s62oc */}
                       <h3 data-pv-block="7s62oc" className="font-secondary font-bold text-[30px] leading-[1.1] tracking-[-0.025em] text-foreground-strong m-[0_0_4px] text-balance">
-                        Built-in hand-off annotations
+                        Hand-off annotations
                       </h3>
                       {/* pv-block-end:7s62oc */}
                       {/* pv-block-start:0oo0xp */}
@@ -2123,7 +2123,7 @@ function FooterCTA(props: any) {
               <div data-pv-block="oc6h0r" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:160ms] flex gap-[12px] mt-[36px] flex-wrap justify-center items-stretch min-w-64 flex-row max-md:flex-col max-md:flex-nowrap max-md:w-full max-md:max-w-[320px] max-md:mx-auto">
                 {/* pv-editable-zone-start:z00108 */}
                   {/* pv-block-start:qnw0mp */}
-                  <Button rightIcon="mdi:arrow-right" data-pv-block="qnw0mp" data-install label="Download" variant="solid" color="primary" size="lg" />
+                  <Button rightIcon="mdi:arrow-right" data-pv-block="qnw0mp" data-install label="Download free" variant="solid" color="primary" size="lg" />
                   {/* pv-block-end:qnw0mp */}
 
                   {/* pv-block-start:s7lvih */}
@@ -2160,16 +2160,56 @@ function FooterCTA(props: any) {
           {/* pv-block-end:b00272 */}
 
           {/* pv-block-start:b00282 */}
-          <div data-pv-block="b00282" className="relative z-[3] mt-[140px] px-[40px] py-[32px] pb-[20px] max-w-[1240px] mx-auto grid-cols-1 text-center md:text-left md:grid-cols-[auto_1fr_auto] gap-[16px] md:gap-[32px] items-center text-[13px] text-foreground-secondary max-md:py-[40px] max-md:px-[20px] max-md:pb-[24px] before:content-[''] before:absolute before:-left-[50vw] before:-right-[50vw] before:top-0 before:-bottom-[100px] before:bg-gradient-to-b before:from-transparent before:to-background-default before:to-60% before:z-[-1] before:pointer-events-none after:content-[''] after:absolute after:left-0 after:right-0 after:top-0 after:h-[1px] after:bg-border-secondary flex flex-col">
+          <div data-pv-block="b00282" className="relative z-[3] mt-20 md:mt-28 mx-auto max-w-[700px] grid gap-7 py-8 md:grid-cols-[auto_auto_auto] md:justify-between md:py-10 text-left text-[13px] text-foreground-secondary before:content-[''] before:absolute before:-left-[50vw] before:-right-[50vw] before:top-0 before:bottom-0 before:bg-gradient-to-b before:from-transparent before:to-background-default before:to-60% before:z-[-1] before:pointer-events-none after:content-[''] after:absolute after:left-0 after:right-0 after:top-0 after:h-[1px] after:bg-border-secondary">
             {/* pv-editable-zone-start:z00101 */}
-              {/* pv-block-start:m1uo22 */}
-              <Image data-pv-block="m1uo22" className="bg-cover bg-center bg-no-repeat bg-[url('/src/images/from-protovibe/protovibe-studio-logo.png')] aspect-[101/12] h-4 opacity-55" />
-              {/* pv-block-end:m1uo22 */}
               {/* pv-block-start:b00290 */}
-              <div data-pv-block="b00290" className="text-[12px] text-center text-balance md:text-right">
-                © 2026 Protovibe Studio · Made with unreasonable care in Poland
+              <div data-pv-block="b00290" className="flex flex-col items-start gap-1">
+                {/* pv-editable-zone-start:a2j4vx */}
+                  {/* pv-block-start:m1uo22 */}
+                  <Image data-pv-block="m1uo22" className="bg-cover bg-center bg-no-repeat bg-[url('/src/images/from-protovibe/protovibe-studio-logo.png')] aspect-[101/12] h-4 mb-2 opacity-80" />
+                  {/* pv-block-end:m1uo22 */}
+                  {/* pv-block-start:v6h4dt */}
+                  <p data-pv-block="v6h4dt">© 2026 Protovibe Studio</p>
+                  {/* pv-block-end:v6h4dt */}
+                  {/* pv-block-start:j9w2pd */}
+                  <p data-pv-block="j9w2pd">Made with unreasonable care in Poland</p>
+                  {/* pv-block-end:j9w2pd */}
+                {/* pv-editable-zone-end:a2j4vx */}
               </div>
               {/* pv-block-end:b00290 */}
+              {/* pv-block-start:a8m2cq */}
+              <nav data-pv-block="a8m2cq" aria-label="Footer resources" className="flex flex-col items-start gap-1">
+                {/* pv-editable-zone-start:w7n9fj */}
+                  {/* pv-block-start:t5q2bx */}
+                  <span data-pv-block="t5q2bx" className="mb-1 font-semibold text-foreground-default">Resources</span>
+                  {/* pv-block-end:t5q2bx */}
+                  {/* pv-block-start:x3a6km */}
+                  <a data-pv-block="x3a6km" href="/docs" className="hover:text-foreground-default">Docs</a>
+                  {/* pv-block-end:x3a6km */}
+                  {/* pv-block-start:h9v4pw */}
+                  <a data-pv-block="h9v4pw" href="https://github.com/Protovibe-Studio/protovibe-studio" target="_blank" rel="noreferrer" className="hover:text-foreground-default">GitHub</a>
+                  {/* pv-block-end:h9v4pw */}
+                  {/* pv-block-start:y5b8du */}
+                  <a data-pv-block="y5b8du" href="/docs#prototype-with-claude-code" className="hover:text-foreground-default">Tutorial</a>
+                  {/* pv-block-end:y5b8du */}
+                {/* pv-editable-zone-end:w7n9fj */}
+              </nav>
+              {/* pv-block-end:a8m2cq */}
+              {/* pv-block-start:n4p9wx */}
+              <div data-pv-block="n4p9wx" className="flex flex-col items-start gap-1">
+                {/* pv-editable-zone-start:z8g6ma */}
+                  {/* pv-block-start:c7w2js */}
+                  <span data-pv-block="c7w2js" className="mb-1 font-semibold text-foreground-default">Contact us</span>
+                  {/* pv-block-end:c7w2js */}
+                  {/* pv-block-start:d2k7ev */}
+                  <a data-pv-block="d2k7ev" href="mailto:protovibe.studio@gmail.com" className="no-underline hover:text-foreground-default">protovibe.studio@gmail.com</a>
+                  {/* pv-block-end:d2k7ev */}
+                  {/* pv-block-start:f5r8lt */}
+                  <a data-pv-block="f5r8lt" href="mailto:saw.maciej@gmail.com" className="no-underline hover:text-foreground-default">saw.maciej@gmail.com</a>
+                  {/* pv-block-end:f5r8lt */}
+                {/* pv-editable-zone-end:z8g6ma */}
+              </div>
+              {/* pv-block-end:n4p9wx */}
             {/* pv-editable-zone-end:z00101 */}
           </div>
           {/* pv-block-end:b00282 */}
@@ -2255,7 +2295,7 @@ function Hero(props: any) {
             {/* pv-block-end:b00305 */}
             {/* pv-block-start:b00306 */}
             <p data-pv-block="b00306" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:80ms] text-[clamp(16px,1.3vw,19px)] text-foreground-default mt-6 mx-auto text-balance max-w-[75ch]">
-              Protovibe Studio is an open-source desktop app that helps professional UX/UI designers work faster with AI agents.
+              Protovibe Studio is an open-source desktop app for professional UX/UI designers that accelerates workflow with AI agents.
             </p>
             {/* pv-block-end:b00306 */}
             {/* pv-block-start:b00307 */}
@@ -2379,7 +2419,7 @@ export default function App() {
   return (
     <>
     {/* pv-block-start:b00291 */}
-    <div data-pv-block="b00291" data-theme="dark" className="bg-background-default text-foreground-default text-[16px] leading-[1.55] antialiased min-h-screen relative overflow-x-clip" style={{ textRendering: 'optimizeLegibility' }}>
+    <div data-pv-block="b00291" data-theme="dark" className="bg-background-default text-foreground-default text-[16px] leading-[1.55] antialiased min-h-screen relative overflow-clip" style={{ textRendering: 'optimizeLegibility' }}>
       {/* pv-editable-zone-start:z00103 */}
         {/* pv-block-start:b00292 */}
         <style data-pv-block="b00292">{GLOBAL_STYLES}</style>
@@ -2436,13 +2476,13 @@ export default function App() {
 
             {/* Testimonial */}
 
-            {/* pv-block-start:b00331 */}
-            <BYOAgent data-pv-block="b00331" />
-            {/* pv-block-end:b00331 */}
-
             {/* pv-block-start:b00330 */}
             <ProblemSolution data-pv-block="b00330" />
             {/* pv-block-end:b00330 */}
+
+            {/* pv-block-start:b00331 */}
+            <BYOAgent data-pv-block="b00331" />
+            {/* pv-block-end:b00331 */}
 
             {/* pv-block-start:fl0001 */}
             <FeaturesList data-pv-block="fl0001" />

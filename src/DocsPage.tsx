@@ -251,7 +251,7 @@ export default function DocsPage() {
                 </InfoBoxBanner>
                 {/* pv-block-end:809gkf */}
                 {/* pv-block-start:6h7evd */}
-                <h3 data-pv-block="6h7evd" className="font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
+                <h3 data-pv-block="6h7evd" id="prototype-with-claude-code" className="scroll-mt-[80px] font-secondary font-bold text-[20px] leading-[1.2] text-foreground-strong m-0 mt-[24px]">
                   Prototype with Claude Code
                 </h3>
                 {/* pv-block-end:6h7evd */}
