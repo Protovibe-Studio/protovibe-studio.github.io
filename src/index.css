@@ -875,3 +875,29 @@ html {
   .agent-prompt-preview .agent-prompt-pointer { animation: none; opacity: 0; }
   .agent-prompt-copy::after { display: none; }
 }
+
+/* Shared grid cell reserves the widest provider's space throughout the loop. */
+.hero-provider-word {
+  opacity: 0;
+  animation: hero-provider-cycle 8.215385s cubic-bezier(.22, 1, .36, 1) infinite;
+}
+.hero-provider-word[data-provider="1"] { animation-delay: 1.461538s; }
+.hero-provider-word[data-provider="2"] { animation-delay: 2.923077s; }
+.hero-provider-word[data-provider="3"] { animation-delay: 4.384615s; animation-name: hero-provider-long; }
+@keyframes hero-provider-cycle {
+  0% { opacity: 0; transform: translateY(65%); }
+  3.370786%, 17.790262% { opacity: 1; transform: translateY(0); }
+  21.161049% { opacity: 0; transform: translateY(-65%); }
+  21.171049%, 100% { opacity: 0; transform: translateY(65%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-provider-word { animation: none; opacity: 0; transform: none; }
+  .hero-provider-word[data-provider="3"] { opacity: 1; }
+}
+
+@keyframes hero-provider-long {
+  0% { opacity: 0; transform: translateY(65%); }
+  3.370786%, 46.629214% { opacity: 1; transform: translateY(0); }
+  50.000000% { opacity: 0; transform: translateY(-65%); }
+  50.010000%, 100% { opacity: 0; transform: translateY(65%); }
+}

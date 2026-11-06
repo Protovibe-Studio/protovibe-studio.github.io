@@ -305,6 +305,21 @@ function FeaturesList(props: any) {
             {/* pv-editable-zone-end:z00003 */}
           </div>
           {/* pv-block-end:b00006 */}
+          {/* pv-block-start:k7p3vt */}
+          <div data-pv-block="k7p3vt" className="flex justify-center pt-10">
+            {/* pv-editable-zone-start:w2m8cx */}
+              {/* pv-block-start:r9d4la */}
+              <a data-pv-block="r9d4la" href="/docs" className="inline-flex">
+                {/* pv-editable-zone-start:u6h1qs */}
+                  {/* pv-block-start:n3f8bz */}
+                  <Button data-pv-block="n3f8bz" label="See screenshots in docs" variant="solid" color="neutral" rightIcon="mdi:arrow-right" />
+                  {/* pv-block-end:n3f8bz */}
+                {/* pv-editable-zone-end:u6h1qs */}
+              </a>
+              {/* pv-block-end:r9d4la */}
+            {/* pv-editable-zone-end:w2m8cx */}
+          </div>
+          {/* pv-block-end:k7p3vt */}
         {/* pv-editable-zone-end:z00001 */}
       </section>
   );
@@ -552,8 +567,8 @@ function PoweredBy(props: any) {
           {/* pv-block-end:b00048 */}
 
           {/* pv-block-start:b00054 */}
-          <div data-pv-block="b00054" className="text-[13px] leading-[1.5] max-w-[30ch] text-pretty max-md:mx-auto text-foreground-tertiary col-span-2 md:col-span-1 max-md:text-center">
-            Protovibe is a Vite plugin that makes Tailwind classes visually editable — no coding required.
+          <div data-pv-block="b00054" className="text-[13px] leading-[1.5] max-w-[30ch] text-pretty max-md:mx-auto col-span-2 md:col-span-1 max-md:text-center text-foreground-default">
+            Local visual editor for React.js + Tailwind with a specially crafted component library, agent skills &amp; Git.
           </div>
           {/* pv-block-end:b00054 */}
         {/* pv-editable-zone-end:z00013 */}
@@ -570,33 +585,29 @@ function BYOAgent(props: any) {
             {/* pv-editable-zone-start:z00016 */}
               {/* pv-block-start:b00058 */}
               <h2 data-pv-block="b00058" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong m-0 text-balance">
-                Prototype with your own AI agent
+                Superpower your vibe-coding
               </h2>
               {/* pv-block-end:b00058 */}
               {/* pv-block-start:b00059 */}
               <p data-pv-block="b00059" className="mt-[20px] text-[16px] text-foreground-secondary max-w-[56ch] mx-auto leading-[1.55] text-pretty">
-                Protovibe doesn't ship its own AI. It plugs into the coding agent
-                you already use and trust. No lock-in, no new API key, no extra
-                subscription — your agent runs locally, your prompts stay yours.
+                Protovibe doesn’t ship its own AI. It works with the coding agent your team already uses. No extra account needed. No new AI provider to approve.
               </p>
               {/* pv-block-end:b00059 */}
-              {/* pv-block-start:2vo1yi */}
-              <div data-pv-block="2vo1yi" className="flex gap-2 flex-row items-center justify-center mt-8 text-foreground-default">
-                {/* pv-editable-zone-start:kwb2x3 */}
-                {/* pv-block-start:t5ltrg */}
-                <Icon data-pv-block="t5ltrg" iconSymbol="material-symbols:check" size="md" />
-                {/* pv-block-end:t5ltrg */}
-                {/* pv-block-start:e60jgb */}
-                <span className="font-medium" data-pv-block="e60jgb">
-                  All coding agents and desktop apps are supported
-                </span>
-                {/* pv-block-end:e60jgb */}
-                {/* pv-editable-zone-end:kwb2x3 */}
-              </div>
-              {/* pv-block-end:2vo1yi */}
               {/* pv-block-start:sjpehh */}
               <AgentPromptPreview data-pv-block="sjpehh" className="mt-8" />
               {/* pv-block-end:sjpehh */}
+              {/* pv-block-start:0qly4m */}
+              <div data-pv-block="0qly4m" className="flex gap-2 flex-row items-center justify-center mt-8 text-foreground-default">
+                {/* pv-editable-zone-start:ac9lof */}
+                  {/* pv-block-start:n7n6uh */}
+                  <Icon data-pv-block="n7n6uh" iconSymbol="material-symbols:check" size="md" aria-hidden="true" />
+                  {/* pv-block-end:n7n6uh */}
+                  {/* pv-block-start:p6dims */}
+                  <span data-pv-block="p6dims" className="font-medium">All coding agents are supported</span>
+                  {/* pv-block-end:p6dims */}
+                {/* pv-editable-zone-end:ac9lof */}
+              </div>
+              {/* pv-block-end:0qly4m */}
             {/* pv-editable-zone-end:z00016 */}
           </div>
           {/* pv-block-end:b00056 */}
@@ -980,12 +991,12 @@ function ProblemSolution(props: any) {
               {/* pv-block-end:b00126 */}
               {/* pv-block-start:b00127 */}
               <h2 data-pv-block="b00127" className="font-secondary font-bold text-[clamp(32px,4.2vw,54px)] leading-[1.04] tracking-[-0.03em] text-foreground-strong m-0 text-balance">
-                Protovibe fixes what AI web builders did wrong
+                Protovibe solves problems with AI workflows
               </h2>
               {/* pv-block-end:b00127 */}
               {/* pv-block-start:b00128 */}
               <p data-pv-block="b00128" className="text-[16px] text-foreground-secondary leading-[1.55] text-balance pb-8 max-w-[70ch] mt-8 mx-auto">
-                Look, prompting an AI to hallucinate a UI is not designing. Design is a process where you move rectangles yourself and iterate. Protovibe Studio brings you back to the driver's seat. <br /><br /><br />
+                Look, design is a process where you move rectangles yourself and iterate. Protovibe Studio puts you back in the driver's seat. <br /><br /><br />
               </p>
               {/* pv-block-end:b00128 */}
             {/* pv-editable-zone-end:z00036 */}
@@ -1022,7 +1033,7 @@ function ProblemSolution(props: any) {
                           {/* pv-block-end:b00205 */}
                           {/* pv-block-start:b00206 */}
                           <p data-pv-block="b00206" className="text-[14.5px] text-foreground-secondary m-0 leading-[1.55] max-w-[52ch] text-pretty">
-                            AI chat is not a design tool. No undo. No sliders. No color picker. No way to quickly explore options. You can't feel design through a text box.
+                            Tools like Figma Make or Google AI Studio are not really design tools. No undo. No sliders. No color picker. No way to quickly explore options. You can't feel design through a text box.
                           </p>
                           {/* pv-block-end:b00206 */}
                         {/* pv-editable-zone-end:z00068 */}
@@ -1036,7 +1047,7 @@ function ProblemSolution(props: any) {
                           {/* pv-block-end:b00208 */}
                           {/* pv-block-start:b00209 */}
                           <p data-pv-block="b00209" className="text-[14.5px] text-foreground-secondary m-0 leading-[1.55] max-w-[52ch] text-pretty">
-                            Protovibe has everything a designer expects — wired to code. Proper undo, a design sidebar, keyboard shortcuts, color sliders, autocomplete fields, and drag &amp; drop.
+                            Protovibe has everything a designer expects — wired to code. Proper undo, a design sidebar, keyboard shortcuts, color sliders, autocomplete fields, etc.
                           </p>
                           {/* pv-block-end:b00209 */}
                         {/* pv-editable-zone-end:z00069 */}
@@ -1074,7 +1085,7 @@ function ProblemSolution(props: any) {
                           {/* pv-block-end:b00135 */}
                           {/* pv-block-start:b00136 */}
                           <p data-pv-block="b00136" className="text-[14.5px] text-foreground-secondary m-0 leading-[1.55] max-w-[52ch] text-pretty">
-                            AI site builders generate different styles with every prompt. Hardcoded #4F7CFF. Random border radius. Inconsistent font sizes.
+                            AI builders generate different styles with every prompt. You start from a blank page and get hardcoded colors, random border radii, and inconsistent font sizes.
                           </p>
                           {/* pv-block-end:b00136 */}
                         {/* pv-editable-zone-end:z00040 */}
@@ -1088,7 +1099,7 @@ function ProblemSolution(props: any) {
                           {/* pv-block-end:b00138 */}
                           {/* pv-block-start:b00139 */}
                           <p data-pv-block="b00139" className="text-[14.5px] text-foreground-secondary m-0 leading-[1.55] max-w-[52ch] text-pretty">
-                            Protovibe lets you set up all your design tokens: colors for light and dark mode, fonts, and spacing. The AI is simply instructed to use only these tokens.
+                            Protovibe lets you set up all your design tokens: colors for light and dark mode, fonts, and spacing. The AI is simply instructed to use only these tokens. You work continuously on one robust super-prototype.
                           </p>
                           {/* pv-block-end:b00139 */}
                         {/* pv-editable-zone-end:z00041 */}
@@ -1126,7 +1137,7 @@ function ProblemSolution(props: any) {
                           {/* pv-block-end:b00145 */}
                           {/* pv-block-start:b00146 */}
                           <p data-pv-block="b00146" className="text-[14.5px] text-foreground-secondary m-0 leading-[1.55] max-w-[52ch] text-pretty">
-                            With tools like Figma Make or Cursor, every damn change requires another prompt. You need to prompt "Add 4px margin" and wait. Then wait again. And again.
+                            With tools like Figma Make or Cursor, every change requires another prompt. You need to prompt "Add a 4px margin" and wait. Then wait again. And again.
                           </p>
                           {/* pv-block-end:b00146 */}
                         {/* pv-editable-zone-end:z00044 */}
@@ -1270,7 +1281,7 @@ function ProblemSolution(props: any) {
                     {/* pv-editable-zone-start:z00055 */}
                       {/* pv-block-start:b00173 */}
                       <h3 data-pv-block="b00173" className="font-secondary font-bold text-[30px] leading-[1.1] tracking-[-0.025em] text-foreground-strong m-[0_0_4px] text-balance">
-                        Design is simply code<br />
+                        Design is code. Code is design.<br />
                       </h3>
                       {/* pv-block-end:b00173 */}
                       {/* pv-block-start:b00174 */}
@@ -1320,7 +1331,7 @@ function ProblemSolution(props: any) {
                     {/* pv-editable-zone-start:yjtsyl */}
                       {/* pv-block-start:7s62oc */}
                       <h3 data-pv-block="7s62oc" className="font-secondary font-bold text-[30px] leading-[1.1] tracking-[-0.025em] text-foreground-strong m-[0_0_4px] text-balance">
-                        Hand-off annotations directly in your prototype
+                        Built-in hand-off annotations
                       </h3>
                       {/* pv-block-end:7s62oc */}
                       {/* pv-block-start:0oo0xp */}
@@ -2180,13 +2191,71 @@ function Hero(props: any) {
             </div>
             {/* pv-block-end:pjtruu */}
             {/* pv-block-start:b00305 */}
-            <h1 data-pv-block="b00305" className="animate-[hero-rise_700ms_ease-out_both] leading-[0.98] tracking-tighter font-secondary font-extrabold mx-auto text-[clamp(44px,9vw,72px)] max-w-[16ch]">
-              Design pixel‑perfect prototypes with AI
+            <h1 data-pv-block="b00305" className="animate-[hero-rise_700ms_ease-out_both] leading-[0.98] tracking-tighter font-secondary font-extrabold mx-auto text-[clamp(44px,9vw,72px)] max-w-[17ch]">
+              {/* pv-editable-zone-start:e7cvb9 */}
+                {/* pv-block-start:x6s8qj */}
+                <span data-pv-block="x6s8qj" className="sr-only">Design pixel-perfect prototypes with any AI agent</span>
+                {/* pv-block-end:x6s8qj */}
+                {/* pv-block-start:k0adgu */}
+                <span data-pv-block="k0adgu" aria-hidden="true" className="block">Design pixel‑perfect prototypes with</span>
+                {/* pv-block-end:k0adgu */}
+                {/* pv-block-start:opejxk */}
+                <span data-pv-block="opejxk" aria-hidden="true" className="hero-provider-cycle grid overflow-hidden py-[0.12em] text-[0.8em] sm:text-[1em]">
+                  {/* pv-editable-zone-start:nl5quz */}
+                    {/* pv-block-start:uspdvk */}
+                    <span data-pv-block="uspdvk" data-provider="0" className="hero-provider-word col-start-1 row-start-1 inline-flex items-center justify-center gap-[0.1em] whitespace-nowrap">
+                      {/* pv-editable-zone-start:c60x0l */}
+                        {/* pv-block-start:kxlhtu */}
+                        <Icon data-pv-block="kxlhtu" iconSymbol="mingcute:claude-line" size="2xl" className="shrink-0 text-foreground-strong w-12! h-12! sm:w-16! sm:h-16! [&_svg]:w-full [&_svg]:h-full" />
+                        {/* pv-block-end:kxlhtu */}
+                        {/* pv-block-start:9cqpcz */}
+                        <span data-pv-block="9cqpcz">Claude</span>
+                        {/* pv-block-end:9cqpcz */}
+                      {/* pv-editable-zone-end:c60x0l */}
+                    </span>
+                    {/* pv-block-end:uspdvk */}
+                    {/* pv-block-start:kie96u */}
+                    <span data-pv-block="kie96u" data-provider="1" className="hero-provider-word col-start-1 row-start-1 inline-flex items-center justify-center gap-[0.1em] whitespace-nowrap">
+                      {/* pv-editable-zone-start:goqdo8 */}
+                        {/* pv-block-start:fdzbrc */}
+                        <Icon data-pv-block="fdzbrc" iconSymbol="meteor-icons:openai" size="2xl" className="shrink-0 text-foreground-strong w-12! h-12! sm:w-16! sm:h-16! [&_svg]:w-full [&_svg]:h-full" />
+                        {/* pv-block-end:fdzbrc */}
+                        {/* pv-block-start:beegoy */}
+                        <span data-pv-block="beegoy">ChatGPT</span>
+                        {/* pv-block-end:beegoy */}
+                      {/* pv-editable-zone-end:goqdo8 */}
+                    </span>
+                    {/* pv-block-end:kie96u */}
+                    {/* pv-block-start:1lczl5 */}
+                    <span data-pv-block="1lczl5" data-provider="2" className="hero-provider-word col-start-1 row-start-1 inline-flex items-center justify-center gap-[0.1em] whitespace-nowrap">
+                      {/* pv-editable-zone-start:5kopsy */}
+                        {/* pv-block-start:m0zdw2 */}
+                        <Icon data-pv-block="m0zdw2" iconSymbol="lineicons:gemini" size="2xl" className="shrink-0 text-foreground-strong w-12! h-12! sm:w-16! sm:h-16! [&_svg]:w-full [&_svg]:h-full" />
+                        {/* pv-block-end:m0zdw2 */}
+                        {/* pv-block-start:tq08g4 */}
+                        <span data-pv-block="tq08g4">Gemini</span>
+                        {/* pv-block-end:tq08g4 */}
+                      {/* pv-editable-zone-end:5kopsy */}
+                    </span>
+                    {/* pv-block-end:1lczl5 */}
+                    {/* pv-block-start:ialokt */}
+                    <span data-pv-block="ialokt" data-provider="3" className="hero-provider-word col-start-1 row-start-1 inline-flex items-center justify-center whitespace-nowrap gap-0">
+                      {/* pv-editable-zone-start:yfq1wj */}
+                        {/* pv-block-start:zpkgro */}
+                        <span data-pv-block="zpkgro">any AI agent</span>
+                        {/* pv-block-end:zpkgro */}
+                      {/* pv-editable-zone-end:yfq1wj */}
+                    </span>
+                    {/* pv-block-end:ialokt */}
+                  {/* pv-editable-zone-end:nl5quz */}
+                </span>
+                {/* pv-block-end:opejxk */}
+              {/* pv-editable-zone-end:e7cvb9 */}
             </h1>
             {/* pv-block-end:b00305 */}
             {/* pv-block-start:b00306 */}
             <p data-pv-block="b00306" className="animate-[hero-rise_700ms_ease-out_both] [animation-delay:80ms] text-[clamp(16px,1.3vw,19px)] text-foreground-default mt-6 mx-auto text-balance max-w-[75ch]">
-              Protovibe Studio is an open-source desktop app for pro UX/UI designers that improves AI workflow. <span> Design directly in React code, with full precision. </span><br /><br />
+              Protovibe Studio is an open-source desktop app that helps professional UX/UI designers work faster with AI agents.
             </p>
             {/* pv-block-end:b00306 */}
             {/* pv-block-start:b00307 */}
