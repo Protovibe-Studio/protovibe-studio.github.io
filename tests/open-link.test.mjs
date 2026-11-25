@@ -7,13 +7,14 @@ const script = readFileSync(new URL('../public/open/open.js', import.meta.url), 
 function visit(search, blocked = false) {
   const elements = { status: { textContent: '' }, open: { hidden: true } };
   const navigations = [];
+  elements.launcher = { set src(url) {
+    if (blocked) throw new Error('User gesture required');
+    navigations.push(url);
+  } };
   runInNewContext(script, {
     URL, URLSearchParams,
     document: { getElementById: id => elements[id] },
-    window: { location: { search, replace(url) {
-      if (blocked) throw new Error('User gesture required');
-      navigations.push(url);
-    } } },
+    window: { location: { search } },
   });
   return { ...elements, navigations };
 }

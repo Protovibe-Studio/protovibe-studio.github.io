@@ -18,7 +18,9 @@
   open.hidden = false;
   status.textContent = 'If Protovibe does not open automatically, click below and allow your browser to open the app.';
   try {
-    window.location.replace(target.href);
+    // An unhandled protocol may navigate to a browser error page without throwing.
+    // Keep both automatic and manual attempts in the frame so this page survives.
+    document.getElementById('launcher').src = target.href;
   } catch {
     // The visible link gives browsers that require a user gesture another attempt.
   }
